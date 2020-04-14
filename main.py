@@ -22,7 +22,10 @@ except FileNotFoundError:
     with open("credentials.json", "w", encoding="utf-8") as f:
         f.write("{}")
 
-print("dev branch")
+try:
+    api = RocketAPI(credentials["login"], credentials["password"])
+except Exception:
+    print("error")
 
 
 def password_check(passwd):
@@ -147,8 +150,7 @@ class SigninWindow(QtWidgets.QMainWindow):
         login = self.login_line.text()
         password = self.password_line.text()
         if login != "" and password != "":
-            self.signin_thread.function = RocketAPI.get_user_data
-            self.signin_thread.args = [login, password]
+            self.signin_thread.function = api.get_user_data
             self.signin_thread.start()
         else:
             QtWidgets.QMessageBox.critical(self, "", "Fill all lines")
@@ -204,7 +206,7 @@ class SignupWindow(QtWidgets.QMainWindow):
         self.error_label.setFont(regular_font)
 
         self.initiate_signup_thread = RocketAPIThread()
-        self.initiate_signup_thread.function = RocketAPI.initiate_signup
+        self.initiate_signup_thread.function = api.initiate_signup
         self.initiate_signup_thread.signal.connect(self.initiate_signup_finished)
 
         self.gridLayout.addWidget(QtWidgets.QLabel(), 0, 0, 1, 4)
@@ -282,10 +284,10 @@ class TokenWindow(QtWidgets.QMainWindow):
         self.new_token_button.setFont(regular_font)
 
         self.initiate_signup_thread = RocketAPIThread()
-        self.initiate_signup_thread.function = RocketAPI.initiate_signup
+        self.initiate_signup_thread.function = api.initiate_signup
         self.initiate_signup_thread.signal.connect(self.initiate_signup_finished)
         self.complete_signup_thread = RocketAPIThread()
-        self.complete_signup_thread.function = RocketAPI.complete_signup
+        self.complete_signup_thread.function = api.complete_signup
         self.complete_signup_thread.signal.connect(self.complete_signup_finished)
         # self.rocket_thread.signal.connect(self.complete_signup_finished)
 
@@ -368,6 +370,8 @@ class ChatsWindow(QtWidgets.QMainWindow):
         self.centralwidget = QtWidgets.QWidget(self)
         self.gridLayout = QtWidgets.QGridLayout(self.centralwidget)
 
+        self.current_chat = None
+
         self.messages_list = QtWidgets.QListWidget(self.centralwidget)
         self.messages_list.setMinimumWidth(350)
         msg = TextMessage(text="Hello, World!", username="@oleg")
@@ -422,9 +426,7 @@ class ChatsWindow(QtWidgets.QMainWindow):
         self.send_message_button.clicked.connect(self.test)
 
         self.get_chats_thread = RocketAPIThread()
-        self.get_chats_thread.function = RocketAPI.get_user_chats
-        self.get_chats_thread.args = [credentials["login"], 
-                                      credentials["password"]]
+        self.get_chats_thread.function = api.get_user_chats
         self.get_chats_thread.signal.connect(self.complete_getting_chats)
         self.loading_movie.start()
         self.get_chats_thread.start()
@@ -543,10 +545,8 @@ class NewChatWindow(QtWidgets.QMainWindow):
 
     def create_chat(self):
         if len(self.user_id_line.text()) == 17:
-            self.create_chat_thread.function = RocketAPI.create_chat
-            self.create_chat_thread.args = [credentials["login"],
-                                            credentials["password"],
-                                            self.user_id_line.text()]
+            self.create_chat_thread.function = api.create_chat
+            self.create_chat_thread.args = [self.user_id_line.text()]
             self.create_chat_thread.start()
         else:
             QtWidgets.QMessageBox().critical(self, " ", "Username should be 9 characters long")
@@ -574,7 +574,7 @@ class MessageWidget(QtWidgets.QWidget):
 if __name__ == "__main__":
     app = QtWidgets.QApplication([""])
     try:
-        response = RocketAPI.get_user_data(credentials["login"], credentials["password"])
+        response = RocketAPI(credentials["login"], credentials["password"]).get_user_data()
         if response["status"] == "OK":
             chats_window = ChatsWindow()
             chats_window.show()
