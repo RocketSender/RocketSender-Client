@@ -22,6 +22,8 @@ except FileNotFoundError:
     with open("credentials.json", "w", encoding="utf-8") as f:
         f.write("{}")
 
+print("dev branch")
+
 
 def password_check(passwd):
     val = True
