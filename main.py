@@ -21,6 +21,8 @@ import hashlib
 import requests
 import json
 import sqlite3
+import time
+import copy
 
 
 class SigninWindow(QtWidgets.QMainWindow):
@@ -374,11 +376,13 @@ class ChatsWindow(QtWidgets.QMainWindow):
         self.pin_file_button = QtWidgets.QPushButton(self.centralwidget)
         self.pin_file_button.setText("+")
         self.pin_file_button.setStyleSheet("background-color: white")
+
         self.message_text_edit = GrowingTextEdit()
         self.message_text_edit.setPlaceholderText("Message")
         self.message_text_edit.setFont(font)
         self.message_text_edit.setMinimumHeight(25)
         self.message_text_edit.setStyleSheet("border: none; background-color: white")
+
         self.send_message_button = QtWidgets.QPushButton(self.centralwidget)
         self.send_message_button.clicked.connect(self.start_sending_message)
         self.send_message_button.setText("Send")
@@ -398,6 +402,10 @@ class ChatsWindow(QtWidgets.QMainWindow):
 
         self.cache_messages_thread = RocketAPIThread()
         self.cache_messages_thread.function = self.cache_messages
+
+        self.send_message_thread = RocketAPIThread()
+        self.send_message_thread.function = api.send_message
+        self.send_message_thread.signal.connect(self.complete_sending_message)
 
         self.chats = session.query(Chat).all()
         self.contacts = session.query(Contact).all()
@@ -443,8 +451,28 @@ class ChatsWindow(QtWidgets.QMainWindow):
         pass
 
     def start_sending_message(self):
-        message = self.message_text_edit.plainText()
+        text = self.message_text_edit.toPlainText()
+        row = len(self.message_list)
+        message = Message(data=text, type=MessageTypes.Text, viewed=False,
+                          chat_id=self.current_chat.chat_id,
+                          sended_by=credentials["username"], name=None,
+                          row=row)
+        self.send_message_thread.args = [MessageTypes.Text,
+                                         bytes(text, "utf-8"),
+                                         message.chat_id, message.sended_by,
+                                         send_time, None, None]
+        self.send_message_thread.start()
+        self.cache_messages([message])
         self.add_messages([message])
+        self.message_text_edit.setPlainText("")
+        self.message_text_edit.repaint()
+
+    def complete_sending_message(self, response):
+        if response[0]["status"] == "OK":
+            row = response[1]
+            self.messages_list.itemWidget(self.message_list.item(row)).message_status_label.setPixmap(QtGui.QPixmap("img/message_sent_server.png").scaled(20, 20, transformMode=QtCore.Qt.SmoothTransformation))
+        else:
+            del self.message_list.takeItem(response[1])
 
     def cache_messages(self, messages):
         for m in messages:
@@ -467,12 +495,6 @@ class ChatsWindow(QtWidgets.QMainWindow):
                 self.contacts_list.setItemWidget(contact_item, contact_widget)
         else:
             self.on_list_label.show()
-
-    # def update_messages_list(self):
-    #     if self.current_chat is not None:
-    #         self.get_messages_thread.start()
-    #     else:
-    #         pass
 
     def timeout(self):
         self.get_chats_thread.start()
@@ -502,14 +524,16 @@ class ChatsWindow(QtWidgets.QMainWindow):
             if self.chats:
                 self.on_list_label.hide()
 
+        elif response["error"] == "No internet connection":
+            return
         else:
-            QtWidgets.QMessageBox().critical(self, "", response["error"])
+            pass
 
     def start_getting_messages(self):
         cached_messages = session.query(Message).filter(Message.chat_id == self.current_chat.chat_id).all()
         if cached_messages:
             self.on_messages_list_label.hide()
-        self.add_messages(cached_messages)
+            self.add_messages(cached_messages)
         self.get_messages_thread.start()
 
     def complete_getting_messages(self, response):
@@ -517,15 +541,21 @@ class ChatsWindow(QtWidgets.QMainWindow):
             self.on_messages_list_label.hide()
             cached_messages = set(session.query(Message).filter(Message.chat_id == self.current_chat.chat_id).all())
 
-            all_messages = [Message(m["data"], m["type"].value, m["viewed"],
-                                    self.current_chat.chat_id, m["sended_by"], m["name"],
-                                    m["unix_time"]) for m in response["messages"]]
+            all_messages = [Message(data=m["data"], type=m["type"].value,
+                                    viewed=m["viewed"], chat_id=self.current_chat.chat_id,
+                                    ended_by=m["sended_by"], name=m["name"],
+                                    unix_time=m["unix_time"])
+                            for m in response["messages"]]
             all_messages_set = set(all_messages)
 
-            messages_to_show = cached_messages | all_messages_set
-            messages_to_show -= set(self.messages)
+            messages_to_show = all_messages_set - cached_messages
+            # messages_to_show ^= set(self.messages)
             messages_to_show = list(messages_to_show)
             messages_to_show.sort(key=lambda x: x.unix_time)
+            # print("[1] All messages:", list(map(lambda x: x.data, list(sorted(list(all_messages), key=lambda x: x.unix_time)))))
+            # print("[2] Cached messages:", list(map(lambda x: x.data, list(sorted(list(cached_messages), key=lambda x: x.unix_time)))))
+            # print("[3] Showed messages:", list(map(lambda x: x.data, list(sorted(list(self.messages), key=lambda x: x.unix_time)))))
+            # print("[4] Messages to show:", list(map(lambda x: x.data, list(messages_to_show))))
 
             self.add_messages(messages_to_show)
 
@@ -539,9 +569,10 @@ class ChatsWindow(QtWidgets.QMainWindow):
             sended_by = "You" if message.sended_by == credentials["username"] else message.sended_by
             if message.sended_by in self.contacts:
                 sended_by = self.contacts[self.contacts.index(message.sended_by)].readable_name
-            msg = TextMessage(text=message.data, username=sended_by)
             if message not in self.messages:
-                chat_widget = TextMessageWidget(msg)
+                message_for_widget = copy.copy(message)
+                message_for_widget.sended_by = sended_by
+                chat_widget = TextMessageWidget(message_for_widget)
                 message_item = QtWidgets.QListWidgetItem()
                 message_item.setSizeHint(chat_widget.sizeHint())
                 self.messages_list.addItem(message_item)
@@ -686,7 +717,7 @@ if __name__ == "__main__":
     # chats_window.show()
     try:
         response = RocketAPI(credentials["login"], credentials["password"]).get_user_data()
-        if response["status"] == "OK":
+        if response["status"] == "OK" or response["error"] == "No internet connection":
             chats_window = ChatsWindow()
             chats_window.show()
         else:
