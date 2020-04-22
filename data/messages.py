@@ -15,7 +15,7 @@ class Message(SqlAlchemyBase):
     viewed = sqlalchemy.Column(sqlalchemy.Boolean)
     unix_time = sqlalchemy.Column(sqlalchemy.Integer)
 
-    def __init__(self, data, type, viewed, chat_id, sended_by, name, unix_time):
+    def __init__(self, data, type, viewed, chat_id, sended_by, name, row=None):
         self.data = data
         self.type = type
         self.viewed = viewed
@@ -23,6 +23,7 @@ class Message(SqlAlchemyBase):
         self.sended_by = sended_by
         self.name = name
         self.chat_id = chat_id
+        self.row_id = row_id
 
     def __eq__(self, other):
         return self.data == other.data and self.type == other.type and\
@@ -30,9 +31,9 @@ class Message(SqlAlchemyBase):
             self.chat_id == other.chat_id and self.sended_by == other.sended_by
 
     def __hash__(self):
-        return int(hexlify(bytes(self.data + str(self.type) +
-                                 str(self.unix_time) + str(self.name) +
-                                 str(self.chat_id) + str(self.sended_by), "utf-8")), 16)
+        return int(hexlify(f"""{self.data}{self.type}
+                               {self.unix_time}{self.name}
+                               {self.chat_id}{self.sended_by}""".encode("utf-8")), 16)
 
     def __str__(self):
         return f"Message(data: {self.data}, type: {self.type}, viewed: {self.viewed}, chat_id: {self.chat_id}, sended_by: {self.sended_by}, name: {self.name}, unix_time: {self.unix_time})"
