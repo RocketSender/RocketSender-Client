@@ -388,9 +388,15 @@ class ChatsWindow(QtWidgets.QMainWindow):
         self.send_message_button.setText("Send")
         self.send_message_button.setFont(font)
 
+        self.current_chat_label = QtWidgets.QLabel()
+        bold_font.setPointSize(16)
+        self.current_chat_label.setFont(bold_font)
+        self.current_chat_label.setAlignment(QtCore.Qt.AlignCenter)
+
         self.buttons_bar = BottomButtonsBar(self)
 
         self.get_chats_thread = RocketAPIThread()
+        # self.get_chats_thread.function = self.start_getting_chats
         self.get_chats_thread.function = api.get_user_chats
         self.get_chats_thread.signal.connect(self.complete_getting_chats)
         self.loading_movie.start()
@@ -407,6 +413,9 @@ class ChatsWindow(QtWidgets.QMainWindow):
         self.send_message_thread.function = api.send_message
         self.send_message_thread.signal.connect(self.complete_sending_message)
 
+        self.update_statuses_thread = RocketAPIThread()
+        self.update_statuses_thread.function = self.update_statuses
+
         self.chats = session.query(Chat).all()
         self.contacts = session.query(Contact).all()
         self.messages = list()
@@ -422,6 +431,7 @@ class ChatsWindow(QtWidgets.QMainWindow):
         self.gridLayout.addWidget(self.send_message_button, 2, 4, 1, 1)
         self.gridLayout.addWidget(self.on_list_label, 1, 0, 1, 2)
         self.gridLayout.addWidget(self.on_messages_list_label, 1, 2, 1, 3)
+        self.gridLayout.addWidget(self.current_chat_label, 0, 2, 1, 3)
         # self.gridLayout.addWidget(self.no_chat_selected_label, 1, 2, 2, 3)
         # self.no_chat_selected_label.hide()
         self.gridLayout.setRowStretch(1, 2)
@@ -440,80 +450,33 @@ class ChatsWindow(QtWidgets.QMainWindow):
         elif self.buttons_bar.current_button == self.buttons_bar.contacts_button:
             NewContactWindow(self).show()
 
-    def chat_selected(self, item):
-        chat_widget = self.chats_list.itemWidget(item)
-        self.current_chat = chat_widget.chat
-        self.messages.clear()
-        self.get_messages_thread.args = [chat_widget.chat.chat_id]
-        self.start_getting_messages()
-
-    def contact_selected(self, contact):
-        pass
-
-    def start_sending_message(self):
-        text = self.message_text_edit.toPlainText()
-        row = len(self.message_list)
-        message = Message(data=text, type=MessageTypes.Text, viewed=False,
-                          chat_id=self.current_chat.chat_id,
-                          sended_by=credentials["username"], name=None,
-                          row=row)
-        self.send_message_thread.args = [MessageTypes.Text,
-                                         bytes(text, "utf-8"),
-                                         message.chat_id, message.sended_by,
-                                         send_time, None, None]
-        self.send_message_thread.start()
-        self.cache_messages([message])
-        self.add_messages([message])
-        self.message_text_edit.setPlainText("")
-        self.message_text_edit.repaint()
-
-    def complete_sending_message(self, response):
-        if response[0]["status"] == "OK":
-            row = response[1]
-            self.messages_list.itemWidget(self.message_list.item(row)).message_status_label.setPixmap(QtGui.QPixmap("img/message_sent_server.png").scaled(20, 20, transformMode=QtCore.Qt.SmoothTransformation))
-        else:
-            del self.message_list.takeItem(response[1])
-
-    def cache_messages(self, messages):
-        for m in messages:
-            m.chat_id = self.current_chat.chat_id
-            if not session.query(Message).filter(Message == m).first():
-                session.add(m)
-            session.commit()
-
-    def update_contacts_list(self):
-        result = session.query(Contact).all()
-        self.contacts_list.clear()
-        self.contacts = list()
-        if result:
-            for contact in result:
-                self.contacts.append(contact)
-                contact_widget = ContactWidget(contact)
-                contact_item = QtWidgets.QListWidgetItem()
-                contact_item.setSizeHint(QtCore.QSize(100, 70))
-                self.contacts_list.addItem(contact_item)
-                self.contacts_list.setItemWidget(contact_item, contact_widget)
-        else:
-            self.on_list_label.show()
-
-    def timeout(self):
+    def start_getting_chats(self):
+        cached_chats = session.query(Chat).order_by(Chat.unix_time.desc()).all()
+        for chat in cached_chats:
+            chat_obj = Chat(chat.username, chat.chat_id, None, None)
+            chats.append(chat_obj)
+            chat_widget = ChatWidget(chat_obj, chat.last_message, self.contacts, image)
+            chat_item = QtWidgets.QListWidgetItem()
+            chat_item.setSizeHint(QtCore.QSize(100, 70))
+            self.chats_list.addItem(chat_item)
+            self.chats_list.setItemWidget(chat_item, chat_widget)
         self.get_chats_thread.start()
-        if self.current_chat is not None:
-            self.get_messages_thread.start()
 
     def complete_getting_chats(self, response):
         if response["status"] == "OK":
             self.chats_list.clear()
             chats = list()
+            # all_chats = list(map(Chat(chat["username"], chat["chat_id"],
+            #                           chat["last_message"], chat["unix_time"]),
+            #                      response["chats"]))
+            # cached_chats = session.query(Chat).order_by(Chat.unix_time.desc()).all()
+            # chats_to_show = all_chats + cached_chats
+            # chats_to_show.sort(key=lambda x: x.unix_time, reversed=True)
             for chat in response["chats"]:
                 image = None
-                if chat["username"] in self.contacts:
-                    contact = self.contacts[self.contacts.index(chat["username"])]
-                    chat["username"] = contact.readable_name
-                    image = contact.picture
                 chat_obj = Chat(chat["username"], chat["chat_id"], None, None)
                 chats.append(chat_obj)
-                chat_widget = ChatWidget(chat_obj, api.decrypt_message(chat["last_message"]), image)
+                chat_widget = ChatWidget(chat_obj, api.decrypt_message(chat["last_message"]), self.contacts, image)
                 chat_item = QtWidgets.QListWidgetItem()
                 chat_item.setSizeHint(QtCore.QSize(100, 70))
                 self.chats_list.addItem(chat_item)
@@ -529,6 +492,105 @@ class ChatsWindow(QtWidgets.QMainWindow):
         else:
             pass
 
+    def chat_selected(self, item):
+        chat_widget = self.chats_list.itemWidget(item)
+        chat = chat_widget.chat
+        self.current_chat = chat
+        self.messages.clear()
+        self.messages_list.clear()
+        username = self.contacts[chat.username] if chat.username in self.contacts else chat.username
+        self.current_chat_label.setText(username)
+        self.get_messages_thread.args = [chat.chat_id]
+        self.start_getting_messages()
+
+    def contact_selected(self, item):
+        pass
+        # contact_widget = self.contacts_list.itemWidget(item)
+        # frame = QtWidgets.QFrame(self)
+        # frame.setFrameStyle(QtWidgets.QFrame.StyledPanel)
+        # layout = QtWidgets.QGridLayout()
+        # delete_button = QtWidgets.QPushButton()
+        # delete_button.setText("Delete")
+        # edit_button = QtWidgets.QPushButton()
+        # edit_button.setText("Edit")
+        # layout.addWidget(delete_button, 0, 0, 1, 1)
+        # layout.addWidget(edit_button, 0, 1, 1, 1)
+        # frame.resize(200, 50)
+        # frame.setStyleSheet("background-color: lightgray")
+        # center_point = contact_widget.rect().center()
+        # frame.move(center_point.x() - 100, center_point.y() - 20)
+        # frame.setStyleSheet("QFrame {border-radius: 20px; border: 1px solid black; background-color: ghostwhite}")
+        # frame.setLayout(layout)
+        # frame.show()
+
+    def start_sending_message(self):
+        text = self.message_text_edit.toPlainText()
+        row = len(self.messages_list)
+        message = Message(data=text, type=MessageTypes.Text, viewed=False,
+                          chat_id=self.current_chat.chat_id,
+                          sended_by=credentials["username"], name=None,
+                          row=row)
+        self.send_message_thread.args = [MessageTypes.Text,
+                                         bytes(text, "utf-8"),
+                                         message.chat_id, self.current_chat.username, row,
+                                         message]
+        self.send_message_thread.start()
+        self.cache_messages([message])
+        self.add_messages([message])
+        self.message_text_edit.setPlainText("")
+        self.message_text_edit.repaint()
+        self.messages_list.scrollToBottom()
+
+    def complete_sending_message(self, response):
+        row = response[1]
+        if response[0]["status"] == "OK":
+            self.messages_list.itemWidget(self.messages_list.item(row)).message_status_label.setPixmap(QtGui.QPixmap("img/message_sent_server.png").scaled(20, 20, transformMode=QtCore.Qt.SmoothTransformation))
+            message = response[2]
+            message.unix_time = response[0]["send_time"]
+            session.merge(message)
+            session.commit()
+        else:
+            print("error sending the message")
+
+    def cache_messages(self, messages):
+        for m in messages:
+            m.chat_id = self.current_chat.chat_id
+            if not session.query(Message).filter(Message == m).first():
+                session.add(m)
+            session.commit()
+
+    def update_statuses(self, messages):
+        try:
+            for n, message in enumerate(messages):
+                cached_message = session.query(Message).filter(Message == message).first()
+                if cached_message.viewed != message.viewed:
+                    self.messages_list.itemWidget(self.messages_list.item(n)).message_status_label.setPixmap(QtGui.QPixmap("img/message_delivered.png").scaled(20, 20, transformMode=QtCore.Qt.SmoothTransformation))
+                    cached_message.viewed = message.viewed
+                    session.merge(cached_message)
+            session.commit()
+        except Exception as e:
+            print(e)
+
+    def update_contacts_list(self):
+        result = session.query(Contact).all()
+        self.contacts_list.clear()
+        self.contacts = list()
+        if result:
+            for contact in result:
+                self.contacts.append(contact)
+                contact_widget = ContactWidget(contact, session)
+                contact_item = QtWidgets.QListWidgetItem()
+                contact_item.setSizeHint(QtCore.QSize(100, 70))
+                self.contacts_list.addItem(contact_item)
+                self.contacts_list.setItemWidget(contact_item, contact_widget)
+        else:
+            self.on_list_label.show()
+
+    def timeout(self):
+        self.get_chats_thread.start()
+        if self.current_chat is not None:
+            self.get_messages_thread.start()
+
     def start_getting_messages(self):
         cached_messages = session.query(Message).filter(Message.chat_id == self.current_chat.chat_id).all()
         if cached_messages:
@@ -538,29 +600,30 @@ class ChatsWindow(QtWidgets.QMainWindow):
 
     def complete_getting_messages(self, response):
         if response["status"] == "OK":
-            self.on_messages_list_label.hide()
-            cached_messages = set(session.query(Message).filter(Message.chat_id == self.current_chat.chat_id).all())
+            try:
+                self.on_messages_list_label.hide()
+                cached_messages = set(session.query(Message).filter(Message.chat_id == self.current_chat.chat_id).all())
+                all_messages = [Message(data=m["data"], type=m["type"].value,
+                                        viewed=m["viewed"], chat_id=self.current_chat.chat_id,
+                                        sended_by=m["sended_by"], name=m["name"],
+                                        unix_time=m["unix_time"])
+                                for m in response["messages"]]
+                all_messages_set = set(all_messages)
 
-            all_messages = [Message(data=m["data"], type=m["type"].value,
-                                    viewed=m["viewed"], chat_id=self.current_chat.chat_id,
-                                    ended_by=m["sended_by"], name=m["name"],
-                                    unix_time=m["unix_time"])
-                            for m in response["messages"]]
-            all_messages_set = set(all_messages)
+                messages_to_show = all_messages_set - cached_messages
+                if messages_to_show:
+                    messages_to_show = list(messages_to_show)
+                    messages_to_show.sort(key=lambda x: x.unix_time)
 
-            messages_to_show = all_messages_set - cached_messages
-            # messages_to_show ^= set(self.messages)
-            messages_to_show = list(messages_to_show)
-            messages_to_show.sort(key=lambda x: x.unix_time)
-            # print("[1] All messages:", list(map(lambda x: x.data, list(sorted(list(all_messages), key=lambda x: x.unix_time)))))
-            # print("[2] Cached messages:", list(map(lambda x: x.data, list(sorted(list(cached_messages), key=lambda x: x.unix_time)))))
-            # print("[3] Showed messages:", list(map(lambda x: x.data, list(sorted(list(self.messages), key=lambda x: x.unix_time)))))
-            # print("[4] Messages to show:", list(map(lambda x: x.data, list(messages_to_show))))
+                    self.add_messages(messages_to_show)
 
-            self.add_messages(messages_to_show)
-
-            self.cache_messages_thread.args = [messages_to_show]
-            self.cache_messages_thread.start()
+                    self.cache_messages_thread.args = [messages_to_show]
+                    self.cache_messages_thread.start()
+                    self.messages_list.scrollToBottom()
+                self.update_statuses_thread.args = [all_messages]
+                self.update_statuses_thread.start()
+            except Exception as e:
+                print(e)
         else:
             QtWidgets.QMessageBox().critical(self, " ", response["error"])
 
@@ -573,11 +636,25 @@ class ChatsWindow(QtWidgets.QMainWindow):
                 message_for_widget = copy.copy(message)
                 message_for_widget.sended_by = sended_by
                 chat_widget = TextMessageWidget(message_for_widget)
+                if message.viewed:
+                    chat_widget.message_status_label.setPixmap(QtGui.QPixmap("img/message_delivered.png").scaled(20, 20, transformMode=QtCore.Qt.SmoothTransformation))
+                elif not message.viewed and message.unix_time < 2147483647:
+                    chat_widget.message_status_label.setPixmap(QtGui.QPixmap("img/message_sent_server.png").scaled(20, 20, transformMode=QtCore.Qt.SmoothTransformation))
+                else:
+                    chat_widget.message_status_label.setPixmap(QtGui.QPixmap("img/message_sent_local.png").scaled(20, 20, transformMode=QtCore.Qt.SmoothTransformation))
                 message_item = QtWidgets.QListWidgetItem()
                 message_item.setSizeHint(chat_widget.sizeHint())
                 self.messages_list.addItem(message_item)
                 self.messages_list.setItemWidget(message_item, chat_widget)
                 self.messages.append(message)
+
+    def add_chats(self, chats):
+        for chat in chats:
+            chat_widget = ChatWidget(chat, api.decrypt_message(chat.last_message), self.contacts, None)
+            chat_item = QtWidgets.QListWidgetItem()
+            chat_item.setSizeHint(QtCore.QSize(100, 70))
+            self.chats_list.addItem(chat_item)
+            self.chats_list.setItemWidget(chat_item, chat_widget)
 
 
 class NewChatWindow(QtWidgets.QMainWindow):
@@ -664,9 +741,6 @@ class NewContactWindow(QtWidgets.QMainWindow):
 
         self.setCentralWidget(self.centralwidget)
 
-    def test(self):
-        print(1)
-
     def upload_picture(self):
         fname, _ = QtWidgets.QFileDialog.getOpenFileName(self, 'Open file', '', "Image files (*.jpg *.png)")
         if fname:
@@ -721,6 +795,7 @@ if __name__ == "__main__":
             chats_window = ChatsWindow()
             chats_window.show()
         else:
+            print(response)
             main = SigninWindow()
             main.show()
     except Exception as e:
