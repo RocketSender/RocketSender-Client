@@ -13,17 +13,18 @@ class Message(SqlAlchemyBase):
     sended_by = sqlalchemy.Column(sqlalchemy.String)
     type = sqlalchemy.Column(sqlalchemy.Integer)
     viewed = sqlalchemy.Column(sqlalchemy.Boolean)
+    server = sqlalchemy.Column(sqlalchemy.Boolean)
     unix_time = sqlalchemy.Column(sqlalchemy.Integer)
 
-    def __init__(self, data, type, viewed, chat_id, sended_by, name, row=None):
+    def __init__(self, data, type, viewed, chat_id, sended_by, name, row=None, unix_time=2147483647):
         self.data = data
         self.type = type
         self.viewed = viewed
-        self.unix_time = unix_time
         self.sended_by = sended_by
         self.name = name
         self.chat_id = chat_id
-        self.row_id = row_id
+        self.unix_time = unix_time
+        self.row = row
 
     def __eq__(self, other):
         return self.data == other.data and self.type == other.type and\
@@ -35,5 +36,5 @@ class Message(SqlAlchemyBase):
                                {self.unix_time}{self.name}
                                {self.chat_id}{self.sended_by}""".encode("utf-8")), 16)
 
-    def __str__(self):
+    def __repr__(self):
         return f"Message(data: {self.data}, type: {self.type}, viewed: {self.viewed}, chat_id: {self.chat_id}, sended_by: {self.sended_by}, name: {self.name}, unix_time: {self.unix_time})"

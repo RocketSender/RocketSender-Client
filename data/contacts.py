@@ -6,7 +6,7 @@ class Contact(SqlAlchemyBase):
     __tablename__ = "contacts"
 
     id = sqlalchemy.Column(sqlalchemy.Integer, primary_key=True, autoincrement=True)
-    username = sqlalchemy.Column(sqlalchemy.String, unique=True)
+    username = sqlalchemy.Column(sqlalchemy.String)
     readable_name = sqlalchemy.Column(sqlalchemy.String)
     picture = sqlalchemy.Column(sqlalchemy.String)
 
