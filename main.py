@@ -466,16 +466,17 @@ class ChatsWindow(QtWidgets.QMainWindow):
         if response["status"] == "OK":
             self.chats_list.clear()
             chats = list()
-            # all_chats = list(map(Chat(chat["username"], chat["chat_id"],
-            #                           chat["last_message"], chat["unix_time"]),
-            #                      response["chats"]))
-            # cached_chats = session.query(Chat).order_by(Chat.unix_time.desc()).all()
-            # chats_to_show = all_chats + cached_chats
-            # chats_to_show.sort(key=lambda x: x.unix_time, reversed=True)
+            all_chats = list(map(Chat(chat["username"], chat["chat_id"],
+                                      chat["last_message"], chat["unix_time"]),
+                                 response["chats"]))
+            cached_chats = session.query(Chat).order_by(Chat.unix_time.desc()).all()
+            chats_to_show = all_chats + cached_chats
+            chats_to_show.sort(key=lambda x: x.unix_time, reversed=True)
             for chat in response["chats"]:
                 image = None
                 chat_obj = Chat(chat["username"], chat["chat_id"], None, None)
                 chats.append(chat_obj)
+                api.decrypt_message(chat.)
                 chat_widget = ChatWidget(chat_obj, api.decrypt_message(chat["last_message"]), self.contacts, image)
                 chat_item = QtWidgets.QListWidgetItem()
                 chat_item.setSizeHint(QtCore.QSize(100, 70))
