@@ -18,6 +18,5 @@ class Chat(SqlAlchemyBase):
         self.unix_time = unix_time
 
     def __eq__(self, other):
-        return self.username == other.username and\
-            self.chat_id == other.chat_id and\
+        return self.chat_id == other.chat_id and\
             self.unix_time == other.unix_time
