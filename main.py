@@ -6,7 +6,7 @@ from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import serialization
 from widgets import (ChatWidget, ContactWidget, TextMessageWidget,
                      BottomButtonsBar, GrowingTextEdit, UsernameLineEdit,
-                     RoundImageLabel)
+                     RoundImageLabel, SettingsWidget)
 from classes import TextMessage
 from functions import password_check
 from constants import bold_font, regular_font, username_len
@@ -394,6 +394,8 @@ class ChatsWindow(QtWidgets.QMainWindow):
         self.current_chat_label.setFont(bold_font)
         self.current_chat_label.setAlignment(QtCore.Qt.AlignCenter)
 
+        self.settings_widget = SettingsWidget()
+
         self.buttons_bar = BottomButtonsBar(self)
 
         self.get_chats_thread = RocketAPIThread()
@@ -441,6 +443,7 @@ class ChatsWindow(QtWidgets.QMainWindow):
         self.gridLayout.addWidget(self.send_message_button, 2, 4, 1, 1)
         self.gridLayout.addWidget(self.on_list_label, 1, 0, 1, 2)
         self.gridLayout.addWidget(self.on_messages_list_label, 1, 2, 1, 3)
+        self.gridLayout.addWidget(self.settings_widget, 1, 0, 1, 2)
         self.gridLayout.addWidget(self.current_chat_label, 0, 2, 1, 3)
         # self.gridLayout.addWidget(self.no_chat_selected_label, 1, 2, 2, 3)
         # self.no_chat_selected_label.hide()
@@ -451,6 +454,7 @@ class ChatsWindow(QtWidgets.QMainWindow):
         if self.chats:
             self.on_list_label.hide()
         self.contacts_list.hide()
+        self.settings_widget.hide()
 
         self.setCentralWidget(self.centralwidget)
 
