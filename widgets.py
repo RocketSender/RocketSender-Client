@@ -9,14 +9,24 @@ import time
 
 
 class ChatWidget(QtWidgets.QWidget):
-    def __init__(self, chat, last_message, contacts, image=None):
+    def __init__(self, chat, last_message, contacts, image=None, username=None):
         super().__init__()
         self.message = "No messages"
+        self.viewed = True
+        self.sended_by = username
         if last_message["status"] == "OK":
             if last_message["type"] == MessageTypes.Text:
-                self.message = last_message["data"]
+                if last_message["sended_by"] == username:
+                    self.message = "You: "
+                    self.message += last_message["data"]
+                else:
+                    self.message = last_message["data"]
+                self.viewed = last_message["viewed"]
+                self.sended_by = last_message["sended_by"]
             else:
-                self.message = last_message["data"].name
+                self.message = last_message["name"]
+        if len(self.message) > 25:
+            self.message = self.message[:25] + "..."
         self.chat = chat
         if chat.username in contacts:
             contact = contacts[contacts.index(chat.username)]
@@ -27,6 +37,11 @@ class ChatWidget(QtWidgets.QWidget):
         user_image_label = RoundImageLabel(image, 45, antialiasing=True)
         user_image_label.setAlignment(QtCore.Qt.AlignCenter)
         username_label = QtWidgets.QLabel(self.chat.username)
+        if self.viewed is False:
+            viewed_label = QtWidgets.QLabel()
+            viewed_label.setStyleSheet("background-color: #0A60FF; border-radius: 4px")
+            viewed_label.setMinimumSize(QtCore.QSize(8, 8))
+            vbox.addWidget(viewed_label, 1, 3, 1, 1)
         bold_font.setPointSize(16)
         username_label.setFont(bold_font)
         message_label = QtWidgets.QLabel(self.message)
@@ -36,8 +51,8 @@ class ChatWidget(QtWidgets.QWidget):
         vbox.setColumnStretch(0, 1)
         vbox.setColumnStretch(1, 5)
         vbox.addWidget(user_image_label, 0, 0, 2, 1)
-        vbox.addWidget(username_label, 0, 1, 1, 2)
-        vbox.addWidget(message_label, 1, 1, 1, 2)
+        vbox.addWidget(username_label, 0, 1, 2, 2)
+        vbox.addWidget(message_label, 2, 1, 2, 2)
         vbox.setAlignment(QtCore.Qt.AlignTop)
         self.setLayout(vbox)
 
@@ -55,7 +70,6 @@ class ContactWidget(QtWidgets.QWidget):
         bold_font.setPointSize(16)
         self.name_label.setFont(bold_font)
 
-        print(contact.picture)
         self.contact_image = RoundImageLabel(contact.picture, 45)
 
         self.username_label = QtWidgets.QLabel()
@@ -231,19 +245,20 @@ class BottomButtonsBar(QtWidgets.QWidget):
         self.button_group = QtWidgets.QButtonGroup(self)
 
         self.contacts_button = QtWidgets.QPushButton(self)
-        self.contacts_button.setText("Contacts")
+        self.contacts_button.setIcon(QtGui.QIcon(QtGui.QPixmap("img/contacts.png")))
+        self.contacts_button.setIconSize(QtCore.QSize(24, 24))
         self.contacts_button.setMinimumHeight(35)
         self.contacts_button.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
 
         self.chats_button = QtWidgets.QPushButton(self)
-        self.chats_button.setText("Chats")
-        # self.chats_button.setIcon(QtGui.QIcon("img/message_bubble.png"))
-
+        self.chats_button.setIcon(QtGui.QIcon(QtGui.QPixmap("img/chats_selected.png")))
+        self.chats_button.setIconSize(QtCore.QSize(24, 24))
         self.chats_button.setMinimumHeight(35)
         self.chats_button.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
 
         self.settings_button = QtWidgets.QPushButton(self)
-        self.settings_button.setText("Settings")
+        self.settings_button.setIcon(QtGui.QIcon(QtGui.QPixmap("img/settings.png")))
+        self.settings_button.setIconSize(QtCore.QSize(24, 24))
         self.settings_button.setMinimumHeight(35)
         self.settings_button.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
 
@@ -254,8 +269,12 @@ class BottomButtonsBar(QtWidgets.QWidget):
         self.button_group.buttonPressed.connect(self.button_pressed)
         for button in self.button_group.buttons():
             button.setStyleSheet("border: none")
-        self.chats_button.setStyleSheet("color: blue; border: none; border-bottom: 1px solid blue")
+        # self.chats_button.setStyleSheet("color: blue; border: none; border-bottom: 1px solid blue")
         self.current_button = self.chats_button
+
+        self.icons = {self.contacts_button: "img/contacts.png",
+                      self.chats_button: "img/chats.png",
+                      self.settings_button: "img/settings.png"}
 
         self.boxLayout.addWidget(self.contacts_button)
         self.boxLayout.addWidget(self.chats_button)
@@ -266,11 +285,13 @@ class BottomButtonsBar(QtWidgets.QWidget):
         self.setLayout(self.boxLayout)
 
     def button_pressed(self, btn):
-        btn.setStyleSheet("color: blue; border: none; border-bottom: 1px solid blue")
+        # btn.setStyleSheet("color: blue; border: none; border-bottom: 1px solid blue")
         for button in self.button_group.buttons():
             if button != btn:
                 button.setStyleSheet("border: none")
+                button.setIcon(QtGui.QIcon(QtGui.QPixmap(self.icons[button])))
         if btn == self.contacts_button:
+            btn.setIcon(QtGui.QIcon(QtGui.QPixmap("img/contacts_selected.png")))
             self.parent.chats_list.hide()
             self.parent.contacts_list.show()
             if self.parent.contacts:
@@ -281,6 +302,7 @@ class BottomButtonsBar(QtWidgets.QWidget):
                 self.parent.on_list_label.show()
             self.current_button = self.contacts_button
         elif btn == self.chats_button:
+            btn.setIcon(QtGui.QIcon(QtGui.QPixmap("img/chats_selected.png")))
             self.parent.contacts_list.hide()
             self.parent.chats_list.show()
             if len(self.parent.chats) == 0:
@@ -289,6 +311,8 @@ class BottomButtonsBar(QtWidgets.QWidget):
             else:
                 self.parent.on_list_label.hide()
             self.current_button = self.chats_button
+        elif btn == self.settings_button:
+            btn.setIcon(QtGui.QIcon(QtGui.QPixmap("img/settings_selected.png")))
 
 
 class GrowingTextEdit(QtWidgets.QTextEdit):
