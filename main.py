@@ -465,7 +465,7 @@ class ChatsWindow(QtWidgets.QMainWindow):
         for chat in cached_chats:
             chat_obj = Chat(chat.username, chat.chat_id, None, None)
             self.chats.append(chat_obj)
-            chat_widget = ChatWidget(chat_obj, chat.last_message, self.contacts, image)
+            chat_widget = ChatWidget(chat_obj, chat.last_message, self.contacts, image, credentials["username"])
             chat_item = QtWidgets.QListWidgetItem()
             chat_item.setSizeHint(QtCore.QSize(100, 70))
             self.chats_list.addItem(chat_item)
@@ -497,7 +497,7 @@ class ChatsWindow(QtWidgets.QMainWindow):
                                 data,
                                 unix_time)
                 chats.append(chat_obj)
-                chat_widget = ChatWidget(chat_obj, decrypted_message, self.contacts, image)
+                chat_widget = ChatWidget(chat_obj, decrypted_message, self.contacts, image, credentials["username"])
                 chat_item = QtWidgets.QListWidgetItem()
                 chat_item.setSizeHint(QtCore.QSize(100, 70))
                 self.chats_list.addItem(chat_item)
@@ -635,34 +635,38 @@ class ChatsWindow(QtWidgets.QMainWindow):
 
     def complete_getting_messages(self, response):
         if response["status"] == "OK":
-            self.on_messages_list_label.hide()
-            try:
-                cached_messages = set(self.message_cache[self.current_chat.chat_id])
-            except:
-                cached_messages = set()
-            all_messages = [Message(data=m["data"], type=m["type"].value,
-                                    viewed=m["viewed"], chat_id=self.current_chat.chat_id,
-                                    sended_by=m["sended_by"], name=m["name"],
-                                    unix_time=m["unix_time"])
-                            for m in response["messages"]]
-            all_messages_set = set(all_messages)
-            messages_to_show = all_messages_set - cached_messages
-            if messages_to_show:
-                messages_to_show = list(messages_to_show)
-                messages_to_show.sort(key=lambda x: x.unix_time)
+            if response["messages"]:
+                try:
+                    self.on_messages_list_label.hide()
+                    try:
+                        cached_messages = set(self.message_cache[self.current_chat.chat_id])
+                    except:
+                        cached_messages = set()
+                    all_messages = [Message(data=m["data"], type=m["type"].value,
+                                            viewed=m["viewed"], chat_id=self.current_chat.chat_id,
+                                            sended_by=m["sended_by"], name=m["name"],
+                                            unix_time=m["unix_time"])
+                                    for m in response["messages"]]
+                    all_messages_set = set(all_messages)
+                    messages_to_show = all_messages_set - cached_messages
+                    if messages_to_show:
+                        messages_to_show = list(messages_to_show)
+                        messages_to_show.sort(key=lambda x: x.unix_time)
 
-                self.add_messages(messages_to_show)
+                        self.add_messages(messages_to_show)
 
-                # self.cache_messages_thread.args = [messages_to_show]
-                # self.cache_messages_thread.start()
-                self.cache_messages(messages_to_show)
-                if self.current_chat.chat_id in self.message_cache:
-                    self.message_cache[self.current_chat.chat_id] += messages_to_show
-                else:
-                    self.message_cache[self.current_chat.chat_id] = messages_to_show
-                self.messages_list.scrollToBottom()
-            self.update_statuses_thread.args = [all_messages]
-            self.update_statuses_thread.start()
+                        # self.cache_messages_thread.args = [messages_to_show]
+                        # self.cache_messages_thread.start()
+                        self.cache_messages(messages_to_show)
+                        if self.current_chat.chat_id in self.message_cache:
+                            self.message_cache[self.current_chat.chat_id] += messages_to_show
+                        else:
+                            self.message_cache[self.current_chat.chat_id] = messages_to_show
+                        self.messages_list.scrollToBottom()
+                    self.update_statuses_thread.args = [all_messages]
+                    self.update_statuses_thread.start()
+                except Exception as e:
+                    print(e)
         else:
             QtWidgets.QMessageBox().critical(self, " ", response["error"])
 
@@ -689,7 +693,7 @@ class ChatsWindow(QtWidgets.QMainWindow):
 
     def add_chats(self, chats):
         for chat in chats:
-            chat_widget = ChatWidget(chat, api.decrypt_message(chat.last_message), self.contacts, None)
+            chat_widget = ChatWidget(chat, api.decrypt_message(chat.last_message), self.contacts, None, credentials["username"])
             chat_item = QtWidgets.QListWidgetItem()
             chat_item.setSizeHint(QtCore.QSize(100, 70))
             self.chats_list.addItem(chat_item)
