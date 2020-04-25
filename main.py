@@ -516,6 +516,7 @@ class ChatsWindow(QtWidgets.QMainWindow):
             pass
 
     def cache_chats(self, chats):
+        session = db_session.create_session()
         for chat in chats:
             cached_chat = session.query(Chat).filter(Chat == chat).first()
             if not cached_chat:
@@ -587,24 +588,23 @@ class ChatsWindow(QtWidgets.QMainWindow):
             print("error sending the message")
 
     def cache_messages(self, messages):
+        session = db_session.create_session()
         for m in messages:
             m.chat_id = self.current_chat.chat_id
-            if not session.query(Message).filter(Message == m).first():
+            cached_message = session.query(Message).filter(Message.unix_time == m.unix_time and Message.chat_id == m.chat_id).first()
+            if not cached_message:
                 session.add(m)
             session.commit()
 
     def update_statuses(self, messages):
-        try:
-            for n, message in enumerate(messages):
-                cached_message = session.query(Message).filter(Message == message).first()
+        session = db_session.create_session()
+        for n, message in enumerate(messages):
+            cached_message = session.query(Message).filter(Message.unix_time == message.unix_time and Message.chat_id == message.chat_id).first()
+            if cached_message is not None:
                 if cached_message.viewed != message.viewed:
-                    print("was viewed by another user")
                     self.messages_list.itemWidget(self.messages_list.item(n)).message_status_label.setPixmap(QtGui.QPixmap("img/message_delivered.png").scaled(20, 20, transformMode=QtCore.Qt.SmoothTransformation))
                     cached_message.viewed = message.viewed
-                    session.merge(cached_message)
-            session.commit()
-        except Exception as e:
-            print(e)
+                    session.commit()
 
     def update_contacts_list(self):
         result = session.query(Contact).all()
@@ -635,36 +635,34 @@ class ChatsWindow(QtWidgets.QMainWindow):
 
     def complete_getting_messages(self, response):
         if response["status"] == "OK":
+            self.on_messages_list_label.hide()
             try:
-                self.on_messages_list_label.hide()
-                try:
-                    cached_messages = set(self.message_cache[self.current_chat.chat_id])
-                except:
-                    cached_messages = set()
-                all_messages = [Message(data=m["data"], type=m["type"].value,
-                                        viewed=m["viewed"], chat_id=self.current_chat.chat_id,
-                                        sended_by=m["sended_by"], name=m["name"],
-                                        unix_time=m["unix_time"])
-                                for m in response["messages"]]
-                all_messages_set = set(all_messages)
+                cached_messages = set(self.message_cache[self.current_chat.chat_id])
+            except:
+                cached_messages = set()
+            all_messages = [Message(data=m["data"], type=m["type"].value,
+                                    viewed=m["viewed"], chat_id=self.current_chat.chat_id,
+                                    sended_by=m["sended_by"], name=m["name"],
+                                    unix_time=m["unix_time"])
+                            for m in response["messages"]]
+            all_messages_set = set(all_messages)
+            messages_to_show = all_messages_set - cached_messages
+            if messages_to_show:
+                messages_to_show = list(messages_to_show)
+                messages_to_show.sort(key=lambda x: x.unix_time)
 
-                messages_to_show = all_messages_set - cached_messages
-                print("[+] Messages to show:", messages_to_show)
-                print("[+] All messages:", all_messages)
-                if messages_to_show:
-                    messages_to_show = list(messages_to_show)
-                    messages_to_show.sort(key=lambda x: x.unix_time)
+                self.add_messages(messages_to_show)
 
-                    self.add_messages(messages_to_show)
-
-                    self.cache_messages_thread.args = [messages_to_show]
-                    self.cache_messages_thread.start()
+                # self.cache_messages_thread.args = [messages_to_show]
+                # self.cache_messages_thread.start()
+                self.cache_messages(messages_to_show)
+                if self.current_chat.chat_id in self.message_cache:
                     self.message_cache[self.current_chat.chat_id] += messages_to_show
-                    self.messages_list.scrollToBottom()
-                self.update_statuses_thread.args = [all_messages]
-                self.update_statuses_thread.start()
-            except Exception as e:
-                print(e)
+                else:
+                    self.message_cache[self.current_chat.chat_id] = messages_to_show
+                self.messages_list.scrollToBottom()
+            self.update_statuses_thread.args = [all_messages]
+            self.update_statuses_thread.start()
         else:
             QtWidgets.QMessageBox().critical(self, " ", response["error"])
 
@@ -848,7 +846,6 @@ if __name__ == "__main__":
             chats_window = ChatsWindow()
             chats_window.show()
         else:
-            print(response)
             main = SigninWindow()
             main.show()
     except Exception as e:
