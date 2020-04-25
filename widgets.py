@@ -6,6 +6,7 @@ from constants import username_len
 from datetime import datetime
 from PIL import Image
 import time
+import json
 
 
 class ChatWidget(QtWidgets.QWidget):
@@ -293,6 +294,7 @@ class BottomButtonsBar(QtWidgets.QWidget):
         if btn == self.contacts_button:
             btn.setIcon(QtGui.QIcon(QtGui.QPixmap("img/contacts_selected.png")))
             self.parent.chats_list.hide()
+            self.parent.settings_widget.hide()
             self.parent.contacts_list.show()
             if self.parent.contacts:
                 self.parent.on_list_label.hide()
@@ -304,6 +306,7 @@ class BottomButtonsBar(QtWidgets.QWidget):
         elif btn == self.chats_button:
             btn.setIcon(QtGui.QIcon(QtGui.QPixmap("img/chats_selected.png")))
             self.parent.contacts_list.hide()
+            self.parent.settings_widget.hide()
             self.parent.chats_list.show()
             if len(self.parent.chats) == 0:
                 self.parent.on_list_label.setText("You have no chats")
@@ -313,6 +316,9 @@ class BottomButtonsBar(QtWidgets.QWidget):
             self.current_button = self.chats_button
         elif btn == self.settings_button:
             btn.setIcon(QtGui.QIcon(QtGui.QPixmap("img/settings_selected.png")))
+            self.parent.settings_widget.show()
+            self.parent.contacts_list.hide()
+            self.parent.chats_list.hide()
 
 
 class GrowingTextEdit(QtWidgets.QTextEdit):
@@ -376,3 +382,55 @@ class RoundImageLabel(QtWidgets.QLabel):
         painter.setClipPath(path)
         painter.drawPixmap(0, 0, p)
         self.setPixmap(self.target)
+
+
+class SettingsWidget(QtWidgets.QFrame):
+    def __init__(self):
+        super().__init__()
+
+        self.gridLayout = QtWidgets.QGridLayout()
+        self.setFrameStyle(QtWidgets.QFrame.Box | QtWidgets.QFrame.Sunken)
+
+        self.credentials = json.load(open("credentials.json", encoding="utf-8"))
+
+        self.your_profile_label = QtWidgets.QLabel("Your profile")
+        bold_font.setPointSize(18)
+        self.your_profile_label.setFont(bold_font)
+
+        self.username_label = QtWidgets.QLabel()
+        self.username_label.setText("Username: " + self.credentials["username"])
+        self.username_label.setMinimumWidth(270)
+        self.username_label.setFont(regular_font)
+
+        self.signout_button = QtWidgets.QPushButton()
+        self.signout_button.setStyleSheet("color: red")
+        self.signout_button.setFont(regular_font)
+        self.signout_button.setText("Sign out")
+
+        self.donate_button = QtWidgets.QPushButton()
+        self.donate_button.setFont(regular_font)
+        self.donate_button.setText("Help project")
+
+        self.about_button = QtWidgets.QPushButton()
+        self.about_button.setFont(regular_font)
+        self.about_button.setText("About")
+
+        self.get_private_key_button = QtWidgets.QPushButton()
+        self.get_private_key_button.setFont(regular_font)
+        self.get_private_key_button.setText("Get private key")
+
+        self.gridLayout.addWidget(self.your_profile_label, 0, 0, 1, 1, alignment=QtCore.Qt.AlignCenter)
+        self.gridLayout.addWidget(self.username_label, 1, 0, 1, 1, alignment=QtCore.Qt.AlignCenter)
+        self.gridLayout.addWidget(QtWidgets.QLabel(), 2, 0, 1, 1)
+        self.gridLayout.addWidget(self.get_private_key_button, 3, 0, 1, 1)
+        self.gridLayout.addWidget(QtWidgets.QLabel(), 4, 0, 1, 1)
+        self.gridLayout.addWidget(self.about_button, 5, 0, 1, 1)
+        self.gridLayout.addWidget(self.donate_button, 6, 0, 1, 1)
+        self.gridLayout.addWidget(QtWidgets.QLabel(), 7, 0, 1, 1)
+        self.gridLayout.addWidget(self.signout_button, 8, 0, 1, 1, alignment=QtCore.Qt.AlignBottom)
+        self.gridLayout.setAlignment(QtCore.Qt.AlignTop)
+        self.gridLayout.setRowStretch(0, 1)
+        self.gridLayout.setRowStretch(1, 1)
+        self.gridLayout.setRowStretch(2, 3)
+        self.gridLayout.setRowStretch(3, 1)
+        self.setLayout(self.gridLayout)
