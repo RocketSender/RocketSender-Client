@@ -9,7 +9,7 @@ from widgets import (ChatWidget, ContactWidget, TextMessageWidget,
                      RoundImageLabel, SettingsWidget)
 from classes import TextMessage
 from functions import password_check
-from constants import bold_font, regular_font, username_len
+from constants import bold_font, regular_font, username_len, api, credentials
 from rocket import RocketAPI, RocketAPIThread, MessageTypes
 from data import db_session
 from data.chats import Chat
@@ -318,7 +318,7 @@ class ChatsWindow(QtWidgets.QMainWindow):
         self.parent = parent
 
         self.resize(800, 576)
-        self.setStyleSheet(f"QMainWindow {{ background-color: {config['background_color']} }}, QLabel {{ color: {config['text_color']} }}")
+        self.setStyleSheet(f"QLabel {{ color: {config['text_color']} }}")
         self.centralwidget = QtWidgets.QWidget(self)
         self.gridLayout = QtWidgets.QGridLayout(self.centralwidget)
 
@@ -382,7 +382,7 @@ class ChatsWindow(QtWidgets.QMainWindow):
         self.message_text_edit.setPlaceholderText("Message")
         self.message_text_edit.setFont(font)
         self.message_text_edit.setMinimumHeight(25)
-        self.message_text_edit.setStyleSheet(f"border: none; background-color: {config['background_color']}")
+        # self.message_text_edit.setStyleSheet(f"border: none; background-color: {config['background_color']}")
 
         self.send_message_button = QtWidgets.QPushButton(self.centralwidget)
         self.send_message_button.clicked.connect(self.start_sending_message)
@@ -670,7 +670,7 @@ class ChatsWindow(QtWidgets.QMainWindow):
                     self.update_statuses_thread.args = [all_messages]
                     self.update_statuses_thread.start()
                 except Exception as e:
-                    print(e)
+                    print(1)
         else:
             QtWidgets.QMessageBox().critical(self, " ", response["error"])
 
@@ -819,18 +819,6 @@ class NewContactWindow(QtWidgets.QMainWindow):
 
 
 if __name__ == "__main__":
-    try:
-        credentials = json.load(open("credentials.json", encoding="utf-8"))
-    except FileNotFoundError:
-        with open("credentials.json", "w", encoding="utf-8") as f:
-            f.write("{}")
-        credentials = json.load(open("credentials.json", encoding="utf-8"))
-    try:
-        api = RocketAPI(credentials["login"], credentials["password"])
-    except Exception:
-        api = RocketAPI("", "")
-        print("error")
-
     db_session.global_init("db/cache.db")
     session = db_session.create_session()
 
@@ -850,6 +838,7 @@ if __name__ == "__main__":
     # chats_window.show()
     try:
         response = RocketAPI(credentials["login"], credentials["password"]).get_user_data()
+        print(1)
         if response["status"] == "OK" or response["error"] == "No internet connection":
             chats_window = ChatsWindow()
             chats_window.show()
@@ -857,7 +846,7 @@ if __name__ == "__main__":
             main = SigninWindow()
             main.show()
     except Exception as e:
-        print(e)
+        print(e, 2)
         main = SigninWindow()
         main.show()
     app.exec()
