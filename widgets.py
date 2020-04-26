@@ -7,6 +7,11 @@ from datetime import datetime
 from PIL import Image
 import time
 import json
+import hashlib
+import pyqrcode
+import os
+from functions import get_tor_session
+from constants import api
 
 
 class ChatWidget(QtWidgets.QWidget):
@@ -390,47 +395,131 @@ class SettingsWidget(QtWidgets.QFrame):
 
         self.gridLayout = QtWidgets.QGridLayout()
         self.setFrameStyle(QtWidgets.QFrame.Box | QtWidgets.QFrame.Sunken)
+        self.setStyleSheet("QPushButton { border: none; background-color: white; text-align: left } QFrame {background-color: white} QPushButton:hover {color: gray}")
 
         self.credentials = json.load(open("credentials.json", encoding="utf-8"))
-
-        self.your_profile_label = QtWidgets.QLabel("Your profile")
-        bold_font.setPointSize(18)
-        self.your_profile_label.setFont(bold_font)
 
         self.username_label = QtWidgets.QLabel()
         self.username_label.setText("Username: " + self.credentials["username"])
         self.username_label.setMinimumWidth(270)
-        self.username_label.setFont(regular_font)
+        bold_font.setPointSize(18)
+        self.username_label.setFont(bold_font)
 
-        self.signout_button = QtWidgets.QPushButton()
-        self.signout_button.setStyleSheet("color: red")
-        self.signout_button.setFont(regular_font)
-        self.signout_button.setText("Sign out")
+        self.logout_button = QtWidgets.QPushButton()
+        self.logout_button.setStyleSheet("color: red; border: none; padding: 5px; border-radius: 5px;")
+        self.logout_button.setFont(regular_font)
+        self.logout_button.setText("Log out")
+        self.logout_button.setObjectName("logout_button")
+        self.setAutoFillBackground(True)
 
         self.donate_button = QtWidgets.QPushButton()
         self.donate_button.setFont(regular_font)
         self.donate_button.setText("Help project")
+        self.donate_button.setIcon(QtGui.QIcon(QtGui.QPixmap("img/donate_icon.png")))
+        self.donate_button.setIconSize(QtCore.QSize(32, 32))
 
         self.about_button = QtWidgets.QPushButton()
         self.about_button.setFont(regular_font)
         self.about_button.setText("About")
+        self.about_button.clicked.connect(self.show_about)
+        self.about_button.setIcon(QtGui.QIcon(QtGui.QPixmap("img/about_icon.png")))
+        self.about_button.setIconSize(QtCore.QSize(32, 32))
 
         self.get_private_key_button = QtWidgets.QPushButton()
         self.get_private_key_button.setFont(regular_font)
         self.get_private_key_button.setText("Get private key")
+        self.get_private_key_button.setIcon(QtGui.QIcon(QtGui.QPixmap("img/private_key_icon.png")))
+        self.get_private_key_button.setIconSize(QtCore.QSize(32, 32))
+        self.get_private_key_button.clicked.connect(self.get_private_key)
 
-        self.gridLayout.addWidget(self.your_profile_label, 0, 0, 1, 1, alignment=QtCore.Qt.AlignCenter)
-        self.gridLayout.addWidget(self.username_label, 1, 0, 1, 1, alignment=QtCore.Qt.AlignCenter)
+        self.dark_mode_button = QtWidgets.QPushButton()
+        self.dark_mode_button.setFont(regular_font)
+        self.dark_mode_button.setText("Dark mode")
+        self.dark_mode_button.setIcon(QtGui.QIcon(QtGui.QPixmap("img/dark_mode_icon.png")))
+        self.dark_mode_button.setIconSize(QtCore.QSize(32, 32))
+
+        self.onion_routing_button = QtWidgets.QPushButton()
+        self.onion_routing_button.setFont(regular_font)
+        self.onion_routing_button.setText("Onion routing")
+        self.onion_routing_button.setStyleSheet("color: black")
+
+        # self.gridLayout.addWidget(self.your_profile_label, 0, 0, 1, 1, alignment=QtCore.Qt.AlignCenter)
+        self.gridLayout.addWidget(self.username_label, 1, 0, 1, 1)
         self.gridLayout.addWidget(QtWidgets.QLabel(), 2, 0, 1, 1)
-        self.gridLayout.addWidget(self.get_private_key_button, 3, 0, 1, 1)
-        self.gridLayout.addWidget(QtWidgets.QLabel(), 4, 0, 1, 1)
-        self.gridLayout.addWidget(self.about_button, 5, 0, 1, 1)
-        self.gridLayout.addWidget(self.donate_button, 6, 0, 1, 1)
-        self.gridLayout.addWidget(QtWidgets.QLabel(), 7, 0, 1, 1)
-        self.gridLayout.addWidget(self.signout_button, 8, 0, 1, 1, alignment=QtCore.Qt.AlignBottom)
+        self.gridLayout.addWidget(self.onion_routing_button, 3, 0, 1, 1)
+        self.gridLayout.addWidget(self.dark_mode_button, 4, 0, 1, 1)
+        self.gridLayout.addWidget(self.get_private_key_button, 5, 0, 1, 1)
+        self.gridLayout.addWidget(QtWidgets.QLabel(), 6, 0, 1, 1)
+        self.gridLayout.addWidget(self.about_button, 7, 0, 1, 1)
+        self.gridLayout.addWidget(self.donate_button, 8, 0, 1, 1)
+        self.gridLayout.addWidget(QtWidgets.QLabel(), 9, 0, 1, 1)
+        self.gridLayout.addWidget(self.logout_button, 10, 0, 1, 1, alignment=QtCore.Qt.AlignBottom)
         self.gridLayout.setAlignment(QtCore.Qt.AlignTop)
         self.gridLayout.setRowStretch(0, 1)
         self.gridLayout.setRowStretch(1, 1)
         self.gridLayout.setRowStretch(2, 3)
         self.gridLayout.setRowStretch(3, 1)
         self.setLayout(self.gridLayout)
+
+    def get_private_key(self):
+        window = QrCodeWindow(self.parent())
+        window.show()
+
+    def show_about(self):
+        window = AboutWindow(self.parent())
+        window.show()
+
+    def button_hovered(self, event):
+        if event == QtCore.Qt.HoverMove:
+            print(1)
+
+
+class QrCodeWindow(QtWidgets.QMainWindow):
+    def __init__(self, parent=None):
+        super().__init__(parent=parent)
+
+        self.centralwidget = QtWidgets.QWidget()
+        self.gridLayout = QtWidgets.QGridLayout(self.centralwidget)
+        self.credentials = json.load(open("credentials.json", encoding="utf-8"))
+
+        self.qr_label = QtWidgets.QLabel()
+        filename = hashlib.sha512(bytes(self.credentials["login"], "utf-8")).hexdigest() + "_qr.png"
+        if os.path.exists(filename) is False:
+            int_key = int(hexlify(open(hashlib.sha512(bytes(self.credentials["login"], "utf-8")).hexdigest() + ".pem", "r", encoding="utf-8").read().encode("utf-8")), 16)
+            qr_code = pyqrcode.create(int_key, error="L")
+            qr_code.png(filename, scale=3)
+        self.qr_label.setPixmap(QtGui.QPixmap(filename))
+        self.qr_label.setAlignment(QtCore.Qt.AlignCenter)
+
+        self.warning_label = QtWidgets.QLabel()
+        bold_font.setPointSize(20)
+        self.warning_label.setFont(bold_font)
+        self.warning_label.setStyleSheet("color: red")
+        self.warning_label.setText("Don't show this QR Code to anyone!")
+        self.warning_label.setAlignment(QtCore.Qt.AlignCenter)
+
+        self.gridLayout.addWidget(self.qr_label, 0, 0, 1, 1)
+        self.gridLayout.addWidget(self.warning_label, 1, 0, 1, 1)
+
+        self.setCentralWidget(self.centralwidget)
+
+
+class AboutWindow(QtWidgets.QMainWindow):
+    def __init__(self, parent=None):
+        super().__init__(parent=parent)
+
+        self.setWindowModality(QtCore.Qt.ApplicationModal)
+        self.centralwidget = QtWidgets.QWidget(self)
+        self.gridLayout = QtWidgets.QGridLayout(self.centralwidget)
+        self.resize(400, 300)
+
+        self.top_label = QtWidgets.QLabel("Rocket Sender")
+        bold_font.setPointSize(20)
+        self.top_label.setFont(bold_font)
+        self.bottom_label = QtWidgets.QLabel("<p>Rocket Sender is an open-source instant messaging app</p> <br/> <p>which main feature is a complete privacy.</p> <br/> On our server we don't store any data related to you <br/> even your email that you have used for registration.")
+        regular_font.setPointSize(16)
+        self.bottom_label.setFont(regular_font)
+        self.gridLayout.addWidget(self.top_label, 0, 0, 1, 1, alignment=QtCore.Qt.AlignCenter)
+        self.gridLayout.addWidget(self.bottom_label, 1, 0, 1, 1)
+
+        self.setCentralWidget(self.centralwidget)
