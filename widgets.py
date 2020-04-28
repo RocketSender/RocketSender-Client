@@ -12,6 +12,7 @@ import pyqrcode
 import os
 from functions import get_tor_session
 from constants import api
+import requests
 
 
 class ChatWidget(QtWidgets.QWidget):
@@ -395,7 +396,9 @@ class SettingsWidget(QtWidgets.QFrame):
 
         self.gridLayout = QtWidgets.QGridLayout()
         self.setFrameStyle(QtWidgets.QFrame.Box | QtWidgets.QFrame.Sunken)
-        self.setStyleSheet("QPushButton { border: none; background-color: white; text-align: left } QFrame {background-color: white} QPushButton:hover {color: gray}")
+        self.setObjectName("mainFrame")
+        # self.setStyleSheet("QPushButton { border: none; background-color: white; text-align: left } QFrame {background-color: white} QPushButton:hover {color: gray}")
+        self.setStyleSheet("QFrame#mainFrame { background-color:white } QPushButton#button {border: none; background-color: white; text-align: left} QPushButton#button:hover { color: gray; }")
 
         self.credentials = json.load(open("credentials.json", encoding="utf-8"))
 
@@ -410,6 +413,7 @@ class SettingsWidget(QtWidgets.QFrame):
         self.logout_button.setFont(regular_font)
         self.logout_button.setText("Log out")
         self.logout_button.setObjectName("logout_button")
+        self.logout_button.clicked.connect(self.logout)
         self.setAutoFillBackground(True)
 
         self.donate_button = QtWidgets.QPushButton()
@@ -417,6 +421,7 @@ class SettingsWidget(QtWidgets.QFrame):
         self.donate_button.setText("Help project")
         self.donate_button.setIcon(QtGui.QIcon(QtGui.QPixmap("img/donate_icon.png")))
         self.donate_button.setIconSize(QtCore.QSize(32, 32))
+        self.donate_button.setObjectName("button")
 
         self.about_button = QtWidgets.QPushButton()
         self.about_button.setFont(regular_font)
@@ -424,6 +429,7 @@ class SettingsWidget(QtWidgets.QFrame):
         self.about_button.clicked.connect(self.show_about)
         self.about_button.setIcon(QtGui.QIcon(QtGui.QPixmap("img/about_icon.png")))
         self.about_button.setIconSize(QtCore.QSize(32, 32))
+        self.about_button.setObjectName("button")
 
         self.get_private_key_button = QtWidgets.QPushButton()
         self.get_private_key_button.setFont(regular_font)
@@ -431,22 +437,32 @@ class SettingsWidget(QtWidgets.QFrame):
         self.get_private_key_button.setIcon(QtGui.QIcon(QtGui.QPixmap("img/private_key_icon.png")))
         self.get_private_key_button.setIconSize(QtCore.QSize(32, 32))
         self.get_private_key_button.clicked.connect(self.get_private_key)
+        self.get_private_key_button.setObjectName("button")
 
         self.dark_mode_button = QtWidgets.QPushButton()
         self.dark_mode_button.setFont(regular_font)
         self.dark_mode_button.setText("Dark mode")
         self.dark_mode_button.setIcon(QtGui.QIcon(QtGui.QPixmap("img/dark_mode_icon.png")))
         self.dark_mode_button.setIconSize(QtCore.QSize(32, 32))
+        self.dark_mode_button.setObjectName("button")
 
         self.onion_routing_button = QtWidgets.QPushButton()
         self.onion_routing_button.setFont(regular_font)
         self.onion_routing_button.setText("Onion routing")
-        self.onion_routing_button.setStyleSheet("color: black")
+        self.onion_routing_button.setIcon(QtGui.QIcon(QtGui.QPixmap("img/tor_icon.png")))
+        self.onion_routing_button.setIconSize(QtCore.QSize(32, 32))
+        self.onion_routing_button.clicked.connect(self.enable_tor)
+        self.onion_routing_button.setObjectName("button")
+
+        self.onion_routing_label = QtWidgets.QLabel("Off")
+        self.onion_routing_label.setFont(regular_font)
+        self.onion_routing_label.setStyleSheet("color: red")
 
         # self.gridLayout.addWidget(self.your_profile_label, 0, 0, 1, 1, alignment=QtCore.Qt.AlignCenter)
         self.gridLayout.addWidget(self.username_label, 1, 0, 1, 1)
         self.gridLayout.addWidget(QtWidgets.QLabel(), 2, 0, 1, 1)
         self.gridLayout.addWidget(self.onion_routing_button, 3, 0, 1, 1)
+        self.gridLayout.addWidget(self.onion_routing_label, 3, 1, 1, 1, alignment=QtCore.Qt.AlignRight)
         self.gridLayout.addWidget(self.dark_mode_button, 4, 0, 1, 1)
         self.gridLayout.addWidget(self.get_private_key_button, 5, 0, 1, 1)
         self.gridLayout.addWidget(QtWidgets.QLabel(), 6, 0, 1, 1)
@@ -472,6 +488,30 @@ class SettingsWidget(QtWidgets.QFrame):
     def button_hovered(self, event):
         if event == QtCore.Qt.HoverMove:
             print(1)
+
+    def logout(self):
+        os.remove("credentials.json")
+        from main import SigninWindow
+        window = SigninWindow(self)
+        window.show()
+
+    def enable_tor(self):
+        if self.onion_routing_label.text() == "Off":
+            try:
+                api.session = get_tor_session()
+                api.get_ip()
+                self.onion_routing_label.setStyleSheet("color: green")
+                self.onion_routing_label.setText("On")
+                msg_box = QtWidgets.QMessageBox()
+                msg_box.setText("Tor enabled successfully ✅")
+                msg_box.setInformativeText("This feature will slow your program but it provides a complete privacy")
+                msg_box.exec()
+            except requests.exceptions.ConnectionError:
+                QtWidgets.QMessageBox().critical(self, " ", "Turn on the tor service")
+        else:
+            self.onion_routing_label.setStyleSheet("color: red")
+            self.onion_routing_label.setText("Off")
+            api.session = requests.Session()
 
 
 class QrCodeWindow(QtWidgets.QMainWindow):
@@ -516,7 +556,8 @@ class AboutWindow(QtWidgets.QMainWindow):
         self.top_label = QtWidgets.QLabel("Rocket Sender")
         bold_font.setPointSize(20)
         self.top_label.setFont(bold_font)
-        self.bottom_label = QtWidgets.QLabel("<p>Rocket Sender is an open-source instant messaging app</p> <br/> <p>which main feature is a complete privacy.</p> <br/> On our server we don't store any data related to you <br/> even your email that you have used for registration.")
+        self.bottom_label = QtWidgets.QLabel("<p>Rocket Sender is an open-source instant messaging app<br/>which main feature is a complete privacy.</p> <p>On our server we don't store any data related to you <br/> even your email that you have used for registration. </p> <p>Our team:</p> <ul><li>Rybalko Oleg <a href='https://instagram.com/rybalko._.oleg'>Instagram</a> <a href='https://github.com/SkullMag'>GitHub</a> <a href='https://www.reddit.com/user/skullmag'>Reddit</a> <a href='mailto:rybalko.oleg.123@mail.ru'>Email</a></li> <li>Vladimir Alexeev <a href='https://github.com/vovo2dev'>GitHub</a> <a href='mailto:vladimiralekxeev@yandex.ru'>Email</a></li></ul>")
+        self.bottom_label.setOpenExternalLinks(True)
         regular_font.setPointSize(16)
         self.bottom_label.setFont(regular_font)
         self.gridLayout.addWidget(self.top_label, 0, 0, 1, 1, alignment=QtCore.Qt.AlignCenter)
