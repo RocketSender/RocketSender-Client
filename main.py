@@ -653,6 +653,7 @@ class ChatsWindow(QtWidgets.QMainWindow):
                                     for m in response["messages"]]
                     all_messages_set = set(all_messages)
                     messages_to_show = all_messages_set - cached_messages
+                    print(all_messages)
                     if messages_to_show:
                         messages_to_show = list(messages_to_show)
                         messages_to_show.sort(key=lambda x: x.unix_time)
@@ -670,7 +671,7 @@ class ChatsWindow(QtWidgets.QMainWindow):
                     self.update_statuses_thread.args = [all_messages]
                     self.update_statuses_thread.start()
                 except Exception as e:
-                    print(1)
+                    print(e, 1)
         else:
             QtWidgets.QMessageBox().critical(self, " ", response["error"])
 
@@ -838,7 +839,6 @@ if __name__ == "__main__":
     # chats_window.show()
     try:
         response = RocketAPI(credentials["login"], credentials["password"]).get_user_data()
-        print(1)
         if response["status"] == "OK" or response["error"] == "No internet connection":
             chats_window = ChatsWindow()
             chats_window.show()
