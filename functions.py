@@ -26,16 +26,18 @@ def password_check(passwd):
 
 def get_tor_session():
     session = requests.Session()
-    # Tor uses the 9050 port as the default socks port
     session.proxies = {'http': 'socks5://127.0.0.1:9050',
                        'https': 'socks5://127.0.0.1:9050'}
     return session
 
 
 def handle_request(name: str, payload: str, function) -> dict:
-    from constants import LINK
+    from constants import LINK, api
     try:
-        response = function(LINK + "/api/" + name, json=payload, verify=False)
+        if api.session.proxies == {}:
+            response = function(LINK + "/api/" + name, json=payload, verify=False, timeout=5)
+        else:
+            response = function(LINK + "/api/" + name, json=payload, verify=False)
         return response.json()
     except requests.exceptions.ConnectionError as e:
         return {"status": "error", "error": "No internet connection"}
