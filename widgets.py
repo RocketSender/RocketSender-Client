@@ -52,6 +52,7 @@ class ChatWidget(QtWidgets.QWidget):
         bold_font.setPointSize(16)
         username_label.setFont(bold_font)
         message_label = QtWidgets.QLabel(self.message)
+        message_label.setOpenExternalLinks(True)
         regular_font.setPointSize(12)
         message_label.setFont(regular_font)
         message_label.setStyleSheet("color: gray")
@@ -61,6 +62,7 @@ class ChatWidget(QtWidgets.QWidget):
         vbox.addWidget(username_label, 0, 1, 2, 2)
         vbox.addWidget(message_label, 2, 1, 2, 2)
         vbox.setAlignment(QtCore.Qt.AlignTop)
+
         self.setLayout(vbox)
 
 
@@ -189,14 +191,12 @@ class TextMessageWidget(QtWidgets.QWidget):
         self.username_label.setStyleSheet("color: blue")
         bold_font.setPointSize(14)
         self.username_label.setFont(bold_font)
+        self.username_label.setMinimumHeight(20)
 
         self.message_label = QtWidgets.QLabel()
         regular_font.setPointSize(14)
         self.message_label.setFont(regular_font)
-        if type(self.message.data) == bytes:
-            self.message_label.setText(str(self.message.data, "utf-8"))
-        else:
-            self.message_label.setText(self.message.data)
+        self.message_label.setText(self.message.data)
         self.message_label.setWordWrap(True)
 
         self.time_label = QtWidgets.QLabel()
@@ -210,14 +210,31 @@ class TextMessageWidget(QtWidgets.QWidget):
 
         self.message_status_label = QtWidgets.QLabel()
         self.message_status_label.setPixmap(QtGui.QPixmap("img/message_sent_local.png").scaled(20, 20, transformMode=QtCore.Qt.SmoothTransformation))
+        self.message_status_label.setMinimumHeight(20)
 
         self.gridLayout.addWidget(self.username_label, 0, 0, 1, 2, alignment=QtCore.Qt.AlignLeft)
         self.gridLayout.addWidget(self.message_label, 1, 0, 1, 2)
         self.gridLayout.addWidget(self.time_label, 1, 2, 1, 1, alignment=QtCore.Qt.AlignRight)
         self.gridLayout.addWidget(self.message_status_label, 0, 2, 1, 1, alignment=QtCore.Qt.AlignRight)
+        self.gridLayout.setAlignment(QtCore.Qt.AlignTop)
         self.gridLayout.setSpacing(5)
-        self.gridLayout.setContentsMargins(11, 5.5, 11, 5.5)
+        self.gridLayout.setContentsMargins(11, 5, 11, 0)
+
+        self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.show_menu)
+
         self.setLayout(self.gridLayout)
+
+    def show_menu(self, event):
+        contextMenu = QtWidgets.QMenu()
+        copy_action = QtWidgets.QAction("Copy")
+        copy_action.triggered.connect(self.copy_to_clipboard)
+        contextMenu.addAction(copy_action)
+        contextMenu.exec(self.mapToGlobal(event))
+
+    def copy_to_clipboard(self):
+        clipboard = QtWidgets.QApplication.clipboard()
+        clipboard.setText(self.message_label.text())
 
 
 class FileMessageWidget(QtWidgets.QWidget):
@@ -231,14 +248,19 @@ class FileMessageWidget(QtWidgets.QWidget):
 
         self.filename_label = QtWidgets.QLabel()
         self.filename_label.setFont(bold_font)
-        self.filename_label.setText(message.name)
+        self.filename_label.setText(json.loads(message.data))
 
         self.size_label = QtWidgets.QLabel()
         self.size_label.setFont(regular_font)
-        self.size_label.setText()
 
         self.download_file_button = QtWidgets.QPushButton()
         self.download_file_button.setText("Download")
+        self.download_file_button.setObjectName("downloadFileBtn")
+        self.download_file_button.setStyleSheet("QPushButton#downloadFileBtn:hover { color: blue }")
+
+        self.gridLayout.addWidget(self.filename_label, 0, 0, 1, 1, alignment=QtCore.Qt.AlignLeft)
+        self.gridLayout.addWidget(self.size_label, 1, 0, 1, 1, alignment=QtCore.Qt.AlignLeft)
+        self.gridLayout.addWidget(self.download_file_button, 1, 1, 1, 1, alignment=QtCore.Qt.AlignLeft)
 
         self.setLayout(self.gridLayout)
 
@@ -390,21 +412,22 @@ class RoundImageLabel(QtWidgets.QLabel):
         self.setPixmap(self.target)
 
 
-class SettingsWidget(QtWidgets.QFrame):
+class SettingsWidget(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
 
         self.gridLayout = QtWidgets.QGridLayout()
-        self.setFrameStyle(QtWidgets.QFrame.Box | QtWidgets.QFrame.Sunken)
+        # self.setFrameStyle(QtWidgets.QFrame.Box | QtWidgets.QFrame.Sunken)
         self.setObjectName("mainFrame")
+        self.setAttribute(QtCore.Qt.WA_StyledBackground, True)
+        self.setMinimumWidth(270)
         # self.setStyleSheet("QPushButton { border: none; background-color: white; text-align: left } QFrame {background-color: white} QPushButton:hover {color: gray}")
-        self.setStyleSheet("QFrame#mainFrame { background-color:white } QPushButton#button {border: none; background-color: white; text-align: left} QPushButton#button:hover { color: gray; }")
+        self.setStyleSheet("QWidget#mainFrame {background-color: white; border: 1px solid lightgrey} QPushButton#button {border: none; background-color: white; text-align: left} QPushButton#button:hover { color: gray; }")
 
         self.credentials = json.load(open("credentials.json", encoding="utf-8"))
 
         self.username_label = QtWidgets.QLabel()
         self.username_label.setText("Username: " + self.credentials["username"])
-        self.username_label.setMinimumWidth(270)
         bold_font.setPointSize(18)
         self.username_label.setFont(bold_font)
 
@@ -492,8 +515,8 @@ class SettingsWidget(QtWidgets.QFrame):
     def logout(self):
         os.remove("credentials.json")
         from main import SigninWindow
-        window = SigninWindow(self)
-        window.show()
+        SigninWindow().show()
+        self.parent().parent().close()
 
     def enable_tor(self):
         if self.onion_routing_label.text() == "Off":
@@ -508,6 +531,7 @@ class SettingsWidget(QtWidgets.QFrame):
                 msg_box.exec()
             except requests.exceptions.ConnectionError:
                 QtWidgets.QMessageBox().critical(self, " ", "Turn on the tor service")
+                api.session = requests.Session()
         else:
             self.onion_routing_label.setStyleSheet("color: red")
             self.onion_routing_label.setText("Off")
@@ -556,7 +580,7 @@ class AboutWindow(QtWidgets.QMainWindow):
         self.top_label = QtWidgets.QLabel("Rocket Sender")
         bold_font.setPointSize(20)
         self.top_label.setFont(bold_font)
-        self.bottom_label = QtWidgets.QLabel("<p>Rocket Sender is an open-source instant messaging app<br/>which main feature is a complete privacy.</p> <p>On our server we don't store any data related to you <br/> even your email that you have used for registration. </p> <p>Our team:</p> <ul><li>Rybalko Oleg <a href='https://instagram.com/rybalko._.oleg'>Instagram</a> <a href='https://github.com/SkullMag'>GitHub</a> <a href='https://www.reddit.com/user/skullmag'>Reddit</a> <a href='mailto:rybalko.oleg.123@mail.ru'>Email</a></li> <li>Vladimir Alexeev <a href='https://github.com/vovo2dev'>GitHub</a> <a href='mailto:vladimiralekxeev@yandex.ru'>Email</a></li></ul>")
+        self.bottom_label = QtWidgets.QLabel("<p>Rocket Sender is an open-source instant messaging app<br/>which main feature is a complete privacy.</p> <p>On our server we don't store any data related to you <br/> even your email that you have used for registration. </p> <p>Our team:</p> <ul><li>Rybalko Oleg <a href='https://instagram.com/rybalko._.oleg'>Instagram</a> <a href='https://github.com/SkullMag'>GitHub</a> <a href='https://www.reddit.com/user/skullmag'>Reddit</a> <a href='mailto:rybalko.oleg.123@mail.ru'>Email</a></li> <li>Alexeev Vladimir <a href='https://github.com/vovo2dev'>GitHub</a> <a href='mailto:vladimiralekxeev@yandex.ru'>Email</a></li></ul>")
         self.bottom_label.setOpenExternalLinks(True)
         regular_font.setPointSize(16)
         self.bottom_label.setFont(regular_font)
