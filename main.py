@@ -9,7 +9,7 @@ from widgets import (ChatWidget, ContactWidget, TextMessageWidget,
                      RoundImageLabel, SettingsWidget)
 from classes import TextMessage
 from functions import password_check
-from constants import bold_font, regular_font, username_len, api, credentials
+from constants import bold_font, regular_font, username_len, api, credentials, config
 from rocket import RocketAPI, RocketAPIThread, MessageTypes
 from data import db_session
 from data.chats import Chat
@@ -81,7 +81,7 @@ class SigninWindow(QtWidgets.QMainWindow):
         self.setCentralWidget(self.centralwidget)
 
     def signin_finished(self, response):
-        global api, credentials
+        global api, credentials, session
         login = self.login_line.text()
         password = self.password_line.text()
         if response["status"] == "OK":
@@ -89,9 +89,11 @@ class SigninWindow(QtWidgets.QMainWindow):
                 response["data"]["login"] = login
                 response["data"]["password"] = password
                 json.dump(response["data"], f)
-            ChatsWindow().show()
             api = RocketAPI(login, password)
             credentials = json.load(open("credentials.json", "r", encoding="utf-8"))
+            db_session.global_init(f"db/{hashlib.sha512(credentials['login'].encode('utf-8')).hexdigest()}.db")
+            session = db_session.create_session()
+            ChatsWindow().show()
             self.close()
         else:
             QtWidgets.QMessageBox.critical(self, "", response["error"])
@@ -325,10 +327,11 @@ class ChatsWindow(QtWidgets.QMainWindow):
         self.current_chat = None
 
         self.messages_list = QtWidgets.QListWidget(self.centralwidget)
+        self.messages_list.setStyleSheet("QListWidget {border: 1px solid lightgrey}")
         # self.messages_list.setMinimumWidth(350)
 
         self.chats_list = QtWidgets.QListWidget(self.centralwidget)
-        self.chats_list.setStyleSheet("QListWidget::item { border-bottom: 1px solid lightgray; }; border: none;")
+        self.chats_list.setStyleSheet("QListWidget::item { border-bottom: 1px solid lightgray; } QListWidget {border: 1px solid lightgrey}")
         self.chats_list.itemClicked.connect(self.chat_selected)
         self.chats_list.setMinimumWidth(270)
 
@@ -376,7 +379,7 @@ class ChatsWindow(QtWidgets.QMainWindow):
 
         self.pin_file_button = QtWidgets.QPushButton(self.centralwidget)
         self.pin_file_button.setText("+")
-        self.pin_file_button.setStyleSheet(f"background-color: {config['background_color']}")
+        # self.pin_file_button.setStyleSheet(f"background-color: {config['background_color']}")
 
         self.message_text_edit = GrowingTextEdit()
         self.message_text_edit.setPlaceholderText("Message")
@@ -480,13 +483,6 @@ class ChatsWindow(QtWidgets.QMainWindow):
         if response["status"] == "OK":
             self.chats_list.clear()
             chats = list()
-            # last_message_time =
-            # all_chats = list(map(lambda chat: Chat(chat["username"], chat["chat_id"],
-            #                                        chat["last_message"], chat["last_message"]["unix_time"]),
-            #                      response["chats"]))
-            # cached_chats = session.query(Chat).order_by(Chat.unix_time.desc()).all()
-            # chats_to_show = all_chats + cached_chats
-            # chats_to_show.sort(key=lambda x: x.unix_time, reversed=True)
             for chat in response["chats"]:
                 image = None
                 decrypted_message = api.decrypt_message(chat["last_message"])
@@ -634,7 +630,7 @@ class ChatsWindow(QtWidgets.QMainWindow):
         cached_messages = session.query(Message).filter(Message.chat_id == self.current_chat.chat_id).all()
         if cached_messages:
             self.on_messages_list_label.hide()
-            self.add_messages(cached_messages)
+            self.add_messages(cached_messages, True)
         self.get_messages_thread.start()
 
     def complete_getting_messages(self, response):
@@ -653,7 +649,6 @@ class ChatsWindow(QtWidgets.QMainWindow):
                                     for m in response["messages"]]
                     all_messages_set = set(all_messages)
                     messages_to_show = all_messages_set - cached_messages
-                    print(all_messages)
                     if messages_to_show:
                         messages_to_show = list(messages_to_show)
                         messages_to_show.sort(key=lambda x: x.unix_time)
@@ -675,7 +670,7 @@ class ChatsWindow(QtWidgets.QMainWindow):
         else:
             QtWidgets.QMessageBox().critical(self, " ", response["error"])
 
-    def add_messages(self, messages):
+    def add_messages(self, messages, scroll=False):
         for message in messages:
             sended_by = "You" if message.sended_by == credentials["username"] else message.sended_by
             if message.sended_by in self.contacts:
@@ -692,9 +687,12 @@ class ChatsWindow(QtWidgets.QMainWindow):
                     chat_widget.message_status_label.setPixmap(QtGui.QPixmap("img/message_sent_local.png").scaled(20, 20, transformMode=QtCore.Qt.SmoothTransformation))
                 message_item = QtWidgets.QListWidgetItem()
                 message_item.setSizeHint(chat_widget.sizeHint())
+                message_item.setFlags(QtCore.Qt.ItemIsSelectable)
                 self.messages_list.addItem(message_item)
                 self.messages_list.setItemWidget(message_item, chat_widget)
                 self.messages.append(message)
+        if scroll:
+            self.messages_list.scrollToBottom()
 
     def add_chats(self, chats):
         for chat in chats:
@@ -820,26 +818,14 @@ class NewContactWindow(QtWidgets.QMainWindow):
 
 
 if __name__ == "__main__":
-    db_session.global_init("db/cache.db")
-    session = db_session.create_session()
-
-    try:
-        config = json.load(open("config.json", encoding="utf-8"))
-    except FileNotFoundError:
-        with open("config.json", "w", encoding="utf-8") as f:
-            json.dump(f, {
-                "background_color": "white",
-                "text_color": "black",
-                "secondary_text_color": "gray"
-            })
-            config = json.load(open("config.json", encoding="utf-8"))
-
     app = QtWidgets.QApplication([""])
     # chats_window = ChatsWindow()
     # chats_window.show()
     try:
         response = RocketAPI(credentials["login"], credentials["password"]).get_user_data()
         if response["status"] == "OK" or response["error"] == "No internet connection":
+            db_session.global_init(f"db/{hashlib.sha512(credentials['login'].encode('utf-8')).hexdigest()}.db")
+            session = db_session.create_session()
             chats_window = ChatsWindow()
             chats_window.show()
         else:
