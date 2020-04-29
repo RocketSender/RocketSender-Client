@@ -32,12 +32,12 @@ def get_tor_session():
 
 
 def handle_request(name: str, payload: str, function) -> dict:
-    from constants import LINK, api
+    from constants import api, config
     try:
         if api.session.proxies == {}:
-            response = function(LINK + "/api/" + name, json=payload, verify=False, timeout=5)
+            response = function(config["server_address"] + "/api/" + name, json=payload, verify=False, timeout=5)
         else:
-            response = function(LINK + "/api/" + name, json=payload, verify=False)
+            response = function(config["server_address"] + "/api/" + name, json=payload, verify=False)
         return response.json()
     except requests.exceptions.ConnectionError as e:
         return {"status": "error", "error": "No internet connection"}
