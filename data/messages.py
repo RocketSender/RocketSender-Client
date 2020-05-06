@@ -8,33 +8,35 @@ class Message(SqlAlchemyBase):
 
     id = sqlalchemy.Column(sqlalchemy.Integer, primary_key=True, autoincrement=True)
     data = sqlalchemy.Column(sqlalchemy.String)
-    name = sqlalchemy.Column(sqlalchemy.String)
     chat_id = sqlalchemy.Column(sqlalchemy.String)
-    sended_by = sqlalchemy.Column(sqlalchemy.String)
+    sent_by = sqlalchemy.Column(sqlalchemy.String)
     type = sqlalchemy.Column(sqlalchemy.Integer)
     viewed = sqlalchemy.Column(sqlalchemy.Boolean)
     server = sqlalchemy.Column(sqlalchemy.Boolean)
     unix_time = sqlalchemy.Column(sqlalchemy.Integer)
+    key = sqlalchemy.Column(sqlalchemy.String)
+    signature = sqlalchemy.Column(sqlalchemy.String)
 
-    def __init__(self, data, type, viewed, chat_id, sended_by, name, row=None, unix_time=2147483647):
+    def __init__(self, data, type, viewed, chat_id, sent_by, row=None, unix_time=2147483647, key=None, signature=None):
         self.data = data
         self.type = type
         self.viewed = viewed
-        self.sended_by = sended_by
-        self.name = name
+        self.sent_by = sent_by
         self.chat_id = chat_id
         self.unix_time = unix_time
         self.row = row
+        self.key = key
+        self.signature = signature
 
     def __eq__(self, other):
         return self.data == other.data and self.type == other.type and\
-            self.unix_time == other.unix_time and self.name == other.name and\
-            self.chat_id == other.chat_id and self.sended_by == other.sended_by
+            self.unix_time == other.unix_time and self.chat_id == other.chat_id and\
+            self.sent_by == other.sent_by
 
     def __hash__(self):
         return int(hexlify(f"""{self.data}{self.type}
-                               {self.unix_time}{self.name}
-                               {self.chat_id}{self.sended_by}""".encode("utf-8")), 16)
+                               {self.unix_time}{self.chat_id}
+                               {self.sent_by}""".encode("utf-8")), 16)
 
     def __repr__(self):
-        return f"Message(data: {self.data}, type: {self.type}, viewed: {self.viewed}, chat_id: {self.chat_id}, sended_by: {self.sended_by}, name: {self.name}, unix_time: {self.unix_time})"
+        return f"Message(data: {self.data}, type: {self.type}, viewed: {self.viewed}, chat_id: {self.chat_id}, sent_by: {self.sent_by}, unix_time: {self.unix_time})"
