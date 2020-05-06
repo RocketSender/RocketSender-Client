@@ -38,7 +38,9 @@ def handle_request(name: str, payload: str, function) -> dict:
             response = function(config["server_address"] + "/api/" + name, json=payload, verify=False, timeout=5)
         else:
             response = function(config["server_address"] + "/api/" + name, json=payload, verify=False)
-        return response.json()
+        if name != "get_file":
+            return response.json()
+        return response.content
     except requests.exceptions.ConnectionError as e:
         return {"status": "error", "error": "No internet connection"}
     except Exception as e:
