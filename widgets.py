@@ -1,8 +1,6 @@
 from PyQt5 import QtWidgets, QtCore, QtGui
 from data.contacts import Contact
-from constants import bold_font, regular_font
-from rocket import MessageTypes
-from constants import username_len
+from rocket import MessageTypes, RocketAPIThread
 from datetime import datetime
 from PIL import Image
 import time
@@ -11,27 +9,29 @@ import hashlib
 import pyqrcode
 import os
 from functions import get_tor_session
-from constants import api
+from constants import api, contacts, credentials, username_len
 import requests
+from binascii import hexlify
 
 
 class ChatWidget(QtWidgets.QWidget):
-    def __init__(self, chat, last_message, contacts, image=None, username=None):
+    def __init__(self, chat, last_message, image=None, username=None):
         super().__init__()
         self.message = "No messages"
         self.viewed = True
-        self.sended_by = username
-        if last_message["status"] == "OK":
-            if last_message["type"] == MessageTypes.Text:
-                if last_message["sended_by"] == username:
-                    self.message = "You: "
-                    self.message += last_message["data"]
+        self.sent_by = username
+        if last_message is not None:
+            if last_message["status"] == "OK":
+                if last_message["type"] == MessageTypes.Text:
+                    if last_message["sent_by"] == username:
+                        self.message = "You: "
+                        self.message += last_message["data"]
+                    else:
+                        self.message = last_message["data"]
+                    self.viewed = last_message["viewed"]
+                    self.sent_by = last_message["sent_by"]
                 else:
                     self.message = last_message["data"]
-                self.viewed = last_message["viewed"]
-                self.sended_by = last_message["sended_by"]
-            else:
-                self.message = last_message["name"]
         if len(self.message) > 25:
             self.message = self.message[:25] + "..."
         self.chat = chat
@@ -49,12 +49,8 @@ class ChatWidget(QtWidgets.QWidget):
             viewed_label.setStyleSheet("background-color: #0A60FF; border-radius: 4px")
             viewed_label.setMinimumSize(QtCore.QSize(8, 8))
             vbox.addWidget(viewed_label, 1, 3, 1, 1)
-        bold_font.setPointSize(16)
-        username_label.setFont(bold_font)
         message_label = QtWidgets.QLabel(self.message)
         message_label.setOpenExternalLinks(True)
-        regular_font.setPointSize(12)
-        message_label.setFont(regular_font)
         message_label.setStyleSheet("color: gray")
         vbox.setColumnStretch(0, 1)
         vbox.setColumnStretch(1, 5)
@@ -76,16 +72,12 @@ class ContactWidget(QtWidgets.QWidget):
 
         self.name_label = QtWidgets.QLabel(self)
         self.name_label.setText(contact.readable_name)
-        bold_font.setPointSize(16)
-        self.name_label.setFont(bold_font)
 
         self.contact_image = RoundImageLabel(contact.picture, 45)
 
         self.username_label = QtWidgets.QLabel()
         self.username_label.setText(contact.username)
         self.username_label.setStyleSheet("color: gray")
-        regular_font.setPointSize(12)
-        self.username_label.setFont(regular_font)
 
         self.gridLayout.addWidget(self.contact_image, 0, 0, 2, 1)
         self.gridLayout.addWidget(self.name_label, 0, 1, 1, 1)
@@ -124,24 +116,20 @@ class ContactWidget(QtWidgets.QWidget):
                 self.setWindowModality(QtCore.Qt.ApplicationModal)
                 self.centralwidget = QtWidgets.QWidget(self)
                 self.gridLayout = QtWidgets.QGridLayout(self.centralwidget)
-                regular_font.setPointSize(14)
 
                 self.picture_label = RoundImageLabel("img/ghost_user.png", 256)
 
                 self.upload_picture_button = QtWidgets.QPushButton()
                 self.upload_picture_button.setText("Upload picture")
-                self.upload_picture_button.setFont(regular_font)
                 self.upload_picture_button.clicked.connect(self.upload_picture)
 
                 self.username_line = UsernameLineEdit()
 
                 self.name_line = QtWidgets.QLineEdit()
                 self.name_line.setPlaceholderText("Name to show")
-                self.name_line.setFont(regular_font)
 
                 self.save_button = QtWidgets.QPushButton()
                 self.save_button.setText("Save")
-                self.save_button.setFont(regular_font)
                 self.save_button.clicked.connect(self.save_contact)
 
                 self.picture_path = contact.picture
@@ -187,21 +175,22 @@ class TextMessageWidget(QtWidgets.QWidget):
 
         self.gridLayout = QtWidgets.QGridLayout(self)
 
-        self.username_label = QtWidgets.QLabel(self.message.sended_by)
+        name_to_show = "You"
+        if self.message.sent_by != credentials["username"]:
+            if self.message.sent_by in contacts:
+                name_to_show = contacts[contacts.index(self.message.sent_by)]
+            else:
+                name_to_show = self.message.sent_by
+
+        self.username_label = QtWidgets.QLabel(name_to_show)
         self.username_label.setStyleSheet("color: blue")
-        bold_font.setPointSize(14)
-        self.username_label.setFont(bold_font)
         self.username_label.setMinimumHeight(20)
 
         self.message_label = QtWidgets.QLabel()
-        regular_font.setPointSize(14)
-        self.message_label.setFont(regular_font)
         self.message_label.setText(self.message.data)
         self.message_label.setWordWrap(True)
 
         self.time_label = QtWidgets.QLabel()
-        regular_font.setPointSize(12)
-        self.time_label.setFont(regular_font)
         self.time_label.setStyleSheet("color: gray")
         if self.message.unix_time < 2147483647:
             self.time_label.setText(datetime.utcfromtimestamp(self.message.unix_time).strftime('%Y %b %A %H:%M'))
@@ -243,26 +232,89 @@ class FileMessageWidget(QtWidgets.QWidget):
         self.message = message
 
         self.gridLayout = QtWidgets.QGridLayout(self)
-        bold_font.setPointSize(14)
-        regular_font.setPointSize(12)
+        message_data = json.loads(message.data)
+
+        self.loading_label = QtWidgets.QLabel(self)
+        self.loading_label.resize(15, 15)
+        self.loading_label.setAlignment(QtCore.Qt.AlignCenter)
+        self.loading_movie = QtGui.QMovie("img/spinner.gif")
+        self.loading_movie.setScaledSize(QtCore.QSize(20, 20))
+        self.loading_movie.setCacheMode(QtGui.QMovie.CacheAll)
+        self.loading_movie.setSpeed(100)
+        self.loading_label.setMovie(self.loading_movie)
+
+        name_to_show = "You"
+        if self.message.sent_by != credentials["username"]:
+            if self.message.sent_by in contacts:
+                name_to_show = contacts[contacts.index(self.message.sent_by)]
+            else:
+                name_to_show = self.message.sent_by
+
+        self.username_label = QtWidgets.QLabel(name_to_show)
+        self.username_label.setStyleSheet("color: blue")
+        self.username_label.setMinimumHeight(20)
 
         self.filename_label = QtWidgets.QLabel()
-        self.filename_label.setFont(bold_font)
-        self.filename_label.setText(json.loads(message.data))
+        self.filename_label.setText(message_data["name"])
+
+        self.file_data = json.loads(message.data)
 
         self.size_label = QtWidgets.QLabel()
-        self.size_label.setFont(regular_font)
+        self.size_label.setStyleSheet("color: grey")
+        self.size_label.setText(message_data["size"])
 
         self.download_file_button = QtWidgets.QPushButton()
         self.download_file_button.setText("Download")
         self.download_file_button.setObjectName("downloadFileBtn")
         self.download_file_button.setStyleSheet("QPushButton#downloadFileBtn:hover { color: blue }")
+        self.download_file_button.clicked.connect(self.download_file)
 
-        self.gridLayout.addWidget(self.filename_label, 0, 0, 1, 1, alignment=QtCore.Qt.AlignLeft)
-        self.gridLayout.addWidget(self.size_label, 1, 0, 1, 1, alignment=QtCore.Qt.AlignLeft)
-        self.gridLayout.addWidget(self.download_file_button, 1, 1, 1, 1, alignment=QtCore.Qt.AlignLeft)
+        self.download_file_thread = RocketAPIThread()
+        self.download_file_thread.function = api.download_file
+        self.download_file_thread.signal.connect(self.download_completed)
+
+        self.time_label = QtWidgets.QLabel()
+        self.time_label.setStyleSheet("color: gray")
+        if self.message.unix_time < 2147483647:
+            self.time_label.setText(datetime.utcfromtimestamp(self.message.unix_time).strftime('%Y %b %A %H:%M'))
+        else:
+            self.time_label.setText(datetime.utcfromtimestamp(time.time()).strftime('%Y %b %A %H:%M'))
+
+        self.message_status_label = QtWidgets.QLabel()
+        self.message_status_label.setPixmap(QtGui.QPixmap("img/message_sent_local.png").scaled(20, 20, transformMode=QtCore.Qt.SmoothTransformation))
+        self.message_status_label.setMinimumHeight(20)
+
+        self.gridLayout.addWidget(self.username_label, 0, 0, 1, 1, alignment=QtCore.Qt.AlignLeft)
+        self.gridLayout.addWidget(self.loading_label, 0, 1, 1, 1, alignment=QtCore.Qt.AlignLeft)
+        self.gridLayout.addWidget(self.filename_label, 1, 0, 1, 1, alignment=QtCore.Qt.AlignLeft)
+        self.gridLayout.addWidget(self.message_status_label, 0, 4, 1, 1, alignment=QtCore.Qt.AlignRight)
+        self.gridLayout.addWidget(self.size_label, 1, 1, 1, 1, alignment=QtCore.Qt.AlignLeft)
+        self.gridLayout.addWidget(self.download_file_button, 1, 2, 1, 1, alignment=QtCore.Qt.AlignLeft)
+        self.gridLayout.addWidget(self.time_label, 1, 4, 1, 1, alignment=QtCore.Qt.AlignRight)
+        self.gridLayout.addWidget(QtWidgets.QLabel(), 1, 3, 1, 1)
+        self.gridLayout.setAlignment(QtCore.Qt.AlignTop)
+
+        self.gridLayout.setColumnStretch(3, 3)
+        self.gridLayout.setSpacing(5)
+        self.gridLayout.setContentsMargins(11, 5, 11, 0)
 
         self.setLayout(self.gridLayout)
+
+    def download_file(self):
+        self.download_file_thread.args = [json.loads(self.message.data),
+                                          self.message.sent_by]
+        self.download_file_thread.start()
+        self.loading_label.show()
+        self.loading_movie.start()
+
+    def download_completed(self, response):
+        self.loading_movie.stop()
+        self.loading_label.hide()
+        if response["status"] == "OK":
+            with open("downloads/" + json.loads(self.message.data)["name"], "wb") as f:
+                f.write(response["data"])
+        else:
+            QtWidgets.QMessageBox().critical(self, " ", response["error"])
 
 
 class BottomButtonsBar(QtWidgets.QWidget):
@@ -276,19 +328,19 @@ class BottomButtonsBar(QtWidgets.QWidget):
         self.contacts_button = QtWidgets.QPushButton(self)
         self.contacts_button.setIcon(QtGui.QIcon(QtGui.QPixmap("img/contacts.png")))
         self.contacts_button.setIconSize(QtCore.QSize(24, 24))
-        self.contacts_button.setMinimumHeight(35)
+        self.contacts_button.setMinimumHeight(28)
         self.contacts_button.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
 
         self.chats_button = QtWidgets.QPushButton(self)
         self.chats_button.setIcon(QtGui.QIcon(QtGui.QPixmap("img/chats_selected.png")))
         self.chats_button.setIconSize(QtCore.QSize(24, 24))
-        self.chats_button.setMinimumHeight(35)
+        self.chats_button.setMinimumHeight(28)
         self.chats_button.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
 
         self.settings_button = QtWidgets.QPushButton(self)
         self.settings_button.setIcon(QtGui.QIcon(QtGui.QPixmap("img/settings.png")))
         self.settings_button.setIconSize(QtCore.QSize(24, 24))
-        self.settings_button.setMinimumHeight(35)
+        self.settings_button.setMinimumHeight(28)
         self.settings_button.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
 
         self.button_group.addButton(self.contacts_button)
@@ -319,12 +371,13 @@ class BottomButtonsBar(QtWidgets.QWidget):
             if button != btn:
                 button.setStyleSheet("border: none")
                 button.setIcon(QtGui.QIcon(QtGui.QPixmap(self.icons[button])))
+                button.repaint()
         if btn == self.contacts_button:
             btn.setIcon(QtGui.QIcon(QtGui.QPixmap("img/contacts_selected.png")))
             self.parent.chats_list.hide()
             self.parent.settings_widget.hide()
             self.parent.contacts_list.show()
-            if self.parent.contacts:
+            if contacts:
                 self.parent.on_list_label.hide()
                 self.parent.update_contacts_list()
             else:
@@ -350,6 +403,7 @@ class BottomButtonsBar(QtWidgets.QWidget):
 
 
 class GrowingTextEdit(QtWidgets.QTextEdit):
+    signal = QtCore.pyqtSignal("PyQt_PyObject")
     def __init__(self, *args, **kwargs):
         super(GrowingTextEdit, self).__init__(*args, **kwargs)
         self.document().contentsChanged.connect(self.sizeChange)
@@ -362,6 +416,12 @@ class GrowingTextEdit(QtWidgets.QTextEdit):
         if self.heightMin <= docHeight <= self.heightMax:
             self.setMinimumHeight(docHeight)
 
+    def keyPressEvent(self, e):
+        if e.key() == QtCore.Qt.Key_Return and e.modifiers() != QtCore.Qt.ShiftModifier:
+            self.signal.emit(e)
+        else:
+            QtWidgets.QTextEdit.keyPressEvent(self, e)
+
 
 class UsernameLineEdit(QtWidgets.QLineEdit):
     def __init__(self):
@@ -370,8 +430,6 @@ class UsernameLineEdit(QtWidgets.QLineEdit):
         self.setText("@")
         self.textChanged.connect(self.line_edit_symbol)
         self.setMaxLength(username_len)
-        regular_font.setPointSize(14)
-        self.setFont(regular_font)
 
     def line_edit_symbol(self):
         if len(self.text()) < 1:
@@ -428,26 +486,23 @@ class SettingsWidget(QtWidgets.QWidget):
 
         self.username_label = QtWidgets.QLabel()
         self.username_label.setText("Username: " + self.credentials["username"])
-        bold_font.setPointSize(18)
-        self.username_label.setFont(bold_font)
+        self.username_label.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
+        self.username_label.setStyleSheet("font-weight: medium; font-size: 20px;")
 
         self.logout_button = QtWidgets.QPushButton()
         self.logout_button.setStyleSheet("color: red; border: none; padding: 5px; border-radius: 5px;")
-        self.logout_button.setFont(regular_font)
         self.logout_button.setText("Log out")
         self.logout_button.setObjectName("logout_button")
         self.logout_button.clicked.connect(self.logout)
         self.setAutoFillBackground(True)
 
         self.donate_button = QtWidgets.QPushButton()
-        self.donate_button.setFont(regular_font)
         self.donate_button.setText("Help project")
         self.donate_button.setIcon(QtGui.QIcon(QtGui.QPixmap("img/donate_icon.png")))
         self.donate_button.setIconSize(QtCore.QSize(32, 32))
         self.donate_button.setObjectName("button")
 
         self.about_button = QtWidgets.QPushButton()
-        self.about_button.setFont(regular_font)
         self.about_button.setText("About")
         self.about_button.clicked.connect(self.show_about)
         self.about_button.setIcon(QtGui.QIcon(QtGui.QPixmap("img/about_icon.png")))
@@ -455,7 +510,6 @@ class SettingsWidget(QtWidgets.QWidget):
         self.about_button.setObjectName("button")
 
         self.get_private_key_button = QtWidgets.QPushButton()
-        self.get_private_key_button.setFont(regular_font)
         self.get_private_key_button.setText("Get private key")
         self.get_private_key_button.setIcon(QtGui.QIcon(QtGui.QPixmap("img/private_key_icon.png")))
         self.get_private_key_button.setIconSize(QtCore.QSize(32, 32))
@@ -463,14 +517,12 @@ class SettingsWidget(QtWidgets.QWidget):
         self.get_private_key_button.setObjectName("button")
 
         self.dark_mode_button = QtWidgets.QPushButton()
-        self.dark_mode_button.setFont(regular_font)
         self.dark_mode_button.setText("Dark mode")
         self.dark_mode_button.setIcon(QtGui.QIcon(QtGui.QPixmap("img/dark_mode_icon.png")))
         self.dark_mode_button.setIconSize(QtCore.QSize(32, 32))
         self.dark_mode_button.setObjectName("button")
 
         self.onion_routing_button = QtWidgets.QPushButton()
-        self.onion_routing_button.setFont(regular_font)
         self.onion_routing_button.setText("Onion routing")
         self.onion_routing_button.setIcon(QtGui.QIcon(QtGui.QPixmap("img/tor_icon.png")))
         self.onion_routing_button.setIconSize(QtCore.QSize(32, 32))
@@ -478,15 +530,14 @@ class SettingsWidget(QtWidgets.QWidget):
         self.onion_routing_button.setObjectName("button")
 
         self.onion_routing_label = QtWidgets.QLabel("Off")
-        self.onion_routing_label.setFont(regular_font)
         self.onion_routing_label.setStyleSheet("color: red")
 
         # self.gridLayout.addWidget(self.your_profile_label, 0, 0, 1, 1, alignment=QtCore.Qt.AlignCenter)
-        self.gridLayout.addWidget(self.username_label, 1, 0, 1, 1)
+        self.gridLayout.addWidget(self.username_label, 1, 0, 1, 1, alignment=QtCore.Qt.AlignTop)
         self.gridLayout.addWidget(QtWidgets.QLabel(), 2, 0, 1, 1)
         self.gridLayout.addWidget(self.onion_routing_button, 3, 0, 1, 1)
         self.gridLayout.addWidget(self.onion_routing_label, 3, 1, 1, 1, alignment=QtCore.Qt.AlignRight)
-        self.gridLayout.addWidget(self.dark_mode_button, 4, 0, 1, 1)
+        # self.gridLayout.addWidget(self.dark_mode_button, 4, 0, 1, 1)
         self.gridLayout.addWidget(self.get_private_key_button, 5, 0, 1, 1)
         self.gridLayout.addWidget(QtWidgets.QLabel(), 6, 0, 1, 1)
         self.gridLayout.addWidget(self.about_button, 7, 0, 1, 1)
@@ -551,14 +602,12 @@ class QrCodeWindow(QtWidgets.QMainWindow):
         if os.path.exists(filename) is False:
             int_key = int(hexlify(open(hashlib.sha512(bytes(self.credentials["login"], "utf-8")).hexdigest() + ".pem", "r", encoding="utf-8").read().encode("utf-8")), 16)
             qr_code = pyqrcode.create(int_key, error="L")
-            qr_code.png(filename, scale=3)
+            qr_code.png(filename, scale=5)
         self.qr_label.setPixmap(QtGui.QPixmap(filename))
         self.qr_label.setAlignment(QtCore.Qt.AlignCenter)
 
         self.warning_label = QtWidgets.QLabel()
-        bold_font.setPointSize(20)
-        self.warning_label.setFont(bold_font)
-        self.warning_label.setStyleSheet("color: red")
+        self.warning_label.setStyleSheet("color: red; font-size: 25px")
         self.warning_label.setText("Don't show this QR Code to anyone!")
         self.warning_label.setAlignment(QtCore.Qt.AlignCenter)
 
@@ -575,16 +624,12 @@ class AboutWindow(QtWidgets.QMainWindow):
         self.setWindowModality(QtCore.Qt.ApplicationModal)
         self.centralwidget = QtWidgets.QWidget(self)
         self.gridLayout = QtWidgets.QGridLayout(self.centralwidget)
-        self.resize(400, 300)
+        self.resize(300, 200)
 
         self.top_label = QtWidgets.QLabel("Rocket Sender")
-        bold_font.setPointSize(20)
-        self.top_label.setFont(bold_font)
         self.bottom_label = QtWidgets.QLabel("<p>Rocket Sender is an open-source instant messaging app<br/>which main feature is a complete privacy.</p> <p>On our server we don't store any data related to you <br/> even your email that you have used for registration. </p> <p>Our team:</p> <ul><li>Rybalko Oleg <a href='https://instagram.com/rybalko._.oleg'>Instagram</a> <a href='https://github.com/SkullMag'>GitHub</a> <a href='https://www.reddit.com/user/skullmag'>Reddit</a> <a href='mailto:rybalko.oleg.123@mail.ru'>Email</a></li> <li>Alexeev Vladimir <a href='https://github.com/vovo2dev'>GitHub</a> <a href='mailto:vladimiralekxeev@yandex.ru'>Email</a></li></ul>")
+        self.bottom_label.setStyleSheet("font-size: 16px")
         self.bottom_label.setOpenExternalLinks(True)
-        regular_font.setPointSize(16)
-        self.bottom_label.setFont(regular_font)
-        self.gridLayout.addWidget(self.top_label, 0, 0, 1, 1, alignment=QtCore.Qt.AlignCenter)
-        self.gridLayout.addWidget(self.bottom_label, 1, 0, 1, 1)
+        self.gridLayout.addWidget(self.bottom_label, 0, 0, 1, 1)
 
         self.setCentralWidget(self.centralwidget)
