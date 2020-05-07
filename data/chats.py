@@ -1,5 +1,6 @@
 import sqlalchemy
 from .db_session import SqlAlchemyBase
+import json
 
 
 class Chat(SqlAlchemyBase):
