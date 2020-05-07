@@ -25,6 +25,7 @@ import json
 import sqlite3
 import time
 import copy
+import sys
 import os
 
 
@@ -306,12 +307,12 @@ class ChatsWindow(QtWidgets.QMainWindow):
         self.setStyleSheet(f"QLabel {{ color: {config['text_color']} }}")
         self.centralwidget = QtWidgets.QWidget(self)
         self.gridLayout = QtWidgets.QGridLayout(self.centralwidget)
+        self.setWindowTitle("Rocket Sender")
 
         self.current_chat = None
 
         self.messages_list = QtWidgets.QListWidget(self.centralwidget)
         self.messages_list.setStyleSheet("QListWidget {border: 1px solid lightgrey}")
-        # self.messages_list.setMinimumWidth(350)
 
         self.chats_list = QtWidgets.QListWidget(self.centralwidget)
         self.chats_list.setStyleSheet("QListWidget::item { border-bottom: 1px solid lightgray; } QListWidget {border: 1px solid lightgrey}")
@@ -319,7 +320,7 @@ class ChatsWindow(QtWidgets.QMainWindow):
         self.chats_list.setMinimumWidth(270)
 
         self.contacts_list = QtWidgets.QListWidget(self.centralwidget)
-        self.contacts_list.setStyleSheet("QListWidget::item { border-bottom: 1px solid lightgray; }; border: none;")
+        self.contacts_list.setStyleSheet("QListWidget::item { border-bottom: 1px solid lightgray; }; QListWidget {border: 1px solid lightgrey}")
         self.contacts_list.itemClicked.connect(self.contact_selected)
         self.contacts_list.setMinimumWidth(270)
 
@@ -332,11 +333,6 @@ class ChatsWindow(QtWidgets.QMainWindow):
         self.on_messages_list_label.setStyleSheet("color: gray")
         self.on_messages_list_label.setAlignment(QtCore.Qt.AlignCenter)
         self.on_messages_list_label.setText("Select a chat")
-
-        # self.no_chat_selected_label = QtWidgets.QLabel("Select a chat")
-        # self.no_chat_selected_label.setFont(regular_font)
-        # self.no_chat_selected_label.setStyleSheet("color: gray; border: 1px solid lightgray; background-color: white;")
-        # self.no_chat_selected_label.setAlignment(QtCore.Qt.AlignCenter)
 
         self.obtain_chats = QtCore.QTimer(self)
         self.obtain_chats.timeout.connect(self.timeout)
@@ -358,13 +354,11 @@ class ChatsWindow(QtWidgets.QMainWindow):
         self.pin_file_button = QtWidgets.QPushButton(self.centralwidget)
         self.pin_file_button.setText("+")
         self.pin_file_button.clicked.connect(self.send_file)
-        # self.pin_file_button.setStyleSheet(f"background-color: {config['background_color']}")
 
         self.message_text_edit = GrowingTextEdit()
         self.message_text_edit.setPlaceholderText("Message")
         self.message_text_edit.setMinimumHeight(28)
         self.message_text_edit.signal.connect(self.message_text_edit_key_press_event)
-        # self.message_text_edit.setStyleSheet(f"border: none; background-color: {config['background_color']}")
 
         self.send_message_button = QtWidgets.QPushButton(self.centralwidget)
         self.send_message_button.clicked.connect(self.start_sending_message)
@@ -378,7 +372,6 @@ class ChatsWindow(QtWidgets.QMainWindow):
         self.buttons_bar = BottomButtonsBar(self)
 
         self.get_chats_thread = RocketAPIThread()
-        # self.get_chats_thread.function = self.start_getting_chats
         self.get_chats_thread.function = api.get_user_chats
         self.get_chats_thread.signal.connect(self.complete_getting_chats)
         self.loading_movie.start()
@@ -427,8 +420,7 @@ class ChatsWindow(QtWidgets.QMainWindow):
         self.gridLayout.addWidget(self.on_messages_list_label, 1, 2, 1, 3)
         self.gridLayout.addWidget(self.settings_widget, 1, 0, 1, 2)
         self.gridLayout.addWidget(self.current_chat_label, 0, 2, 1, 3)
-        # self.gridLayout.addWidget(self.no_chat_selected_label, 1, 2, 2, 3)
-        # self.no_chat_selected_label.hide()
+
         self.gridLayout.setRowStretch(1, 2)
         self.gridLayout.setRowStretch(2, 1)
         self.gridLayout.setSpacing(5)
@@ -437,6 +429,7 @@ class ChatsWindow(QtWidgets.QMainWindow):
             self.on_list_label.hide()
         self.contacts_list.hide()
         self.settings_widget.hide()
+        self.start_getting_chats()
 
         self.setCentralWidget(self.centralwidget)
 
@@ -453,9 +446,12 @@ class ChatsWindow(QtWidgets.QMainWindow):
     def start_getting_chats(self):
         cached_chats = session.query(Chat).order_by(Chat.unix_time.desc()).all()
         for chat in cached_chats:
-            chat_obj = Chat(chat.username, chat.chat_id, None, None)
+            chat_obj = Chat(chat.username, chat.chat_id, chat.last_message, None)
+            image = None
             self.chats.append(chat_obj)
-            chat_widget = ChatWidget(chat_obj, chat.last_message, image, credentials["username"])
+            # payload = {"status": "OK", "data": chat.last_message, "type": MessageTypes.Text, "sent_by": "@8025a412", "viewed": True}
+            chat_obj.last_message = json.loads(chat.last_message)
+            chat_widget = ChatWidget(chat_obj, image, credentials["username"])
             chat_item = QtWidgets.QListWidgetItem()
             chat_item.setSizeHint(QtCore.QSize(100, 70))
             self.chats_list.addItem(chat_item)
@@ -484,15 +480,15 @@ class ChatsWindow(QtWidgets.QMainWindow):
                         data = "Document"
                         decrypted_message = {"data": data, "status": "OK", "type": MessageTypes.Document}
 
-                chat_obj = Chat(chat["username"], chat["chat_id"], data, unix_time)
+                chat_obj = Chat(chat["username"], chat["chat_id"], decrypted_message, unix_time)
                 chats.append(chat_obj)
-                chat_widget = ChatWidget(chat_obj, decrypted_message, image, credentials["username"])
+                chat_widget = ChatWidget(chat_obj, image, credentials["username"])
                 chat_item = QtWidgets.QListWidgetItem()
                 chat_item.setSizeHint(QtCore.QSize(100, 70))
                 self.chats_list.addItem(chat_item)
                 self.chats_list.setItemWidget(chat_item, chat_widget)
-            # self.cache_chats_thread.args = [all_chats]
-            # self.cache_chats_thread.start()
+            self.cache_chats_thread.args = [chats]
+            self.cache_chats_thread.start()
             self.loading_movie.stop()
             self.loading_label.hide()
             self.chats = chats
@@ -512,8 +508,8 @@ class ChatsWindow(QtWidgets.QMainWindow):
                 session.add(chat)
             elif cached_chat.unix_time != chat.unix_time:
                 cached_chat.unix_time = chat.unix_time
-                cached_chat.last_message = chat.last_message
-                session.merge(cached_message)
+                cached_chat.last_message = json.dumps(chat.last_message)
+                session.merge(cached_chat)
         session.commit()
 
     def chat_selected(self, item):
@@ -557,10 +553,10 @@ class ChatsWindow(QtWidgets.QMainWindow):
 
     def start_sending_message(self):
         try:
+            text = self.message_text_edit.toPlainText()
             self.message_text_edit.setPlainText("")
             self.message_text_edit.repaint()
             self.messages_list.scrollToBottom()
-            text = self.message_text_edit.toPlainText()
             row = len(self.messages_list)
             message = Message(data=text, type=MessageTypes.Text, viewed=False,
                               chat_id=self.current_chat.chat_id,
@@ -596,17 +592,20 @@ class ChatsWindow(QtWidgets.QMainWindow):
             session.commit()
 
     def update_statuses(self, messages):
-        session = db_session.create_session()
-        for n, message in enumerate(messages):
-            cached_message = session.query(Message).filter(Message.unix_time == message.unix_time and
-                                                           Message.chat_id == message.chat_id).first()
-            if cached_message is not None:
-                if cached_message.viewed != message.viewed:
-                    self.messages_list.itemWidget(self.messages_list.item(n)).message_status_label.setPixmap(QtGui.QPixmap("img/message_delivered.png").scaled(20, 20, transformMode=QtCore.Qt.SmoothTransformation))
-                    cached_message.viewed = message.viewed
-                    if cached_message.type == MessageTypes.Document:
-                        cached_message.data = message.data
-                    session.commit()
+        try:
+            session = db_session.create_session()
+            for n, message in enumerate(messages):
+                cached_message = session.query(Message).filter(Message.unix_time == message.unix_time and
+                                                               Message.chat_id == message.chat_id).first()
+                if cached_message is not None:
+                    if cached_message.viewed != message.viewed:
+                        self.messages_list.itemWidget(self.messages_list.item(n)).message_status_label.setPixmap(QtGui.QPixmap("img/message_delivered.png").scaled(20, 20, transformMode=QtCore.Qt.SmoothTransformation))
+                        cached_message.viewed = message.viewed
+                        if cached_message.type == MessageTypes.Document:
+                            cached_message.data = message.data
+                        session.commit()
+        except Exception as e:
+            print(e)
 
     def update_contacts_list(self):
         result = session.query(Contact).all()
@@ -655,6 +654,8 @@ class ChatsWindow(QtWidgets.QMainWindow):
                 messages_to_show = all_messages_set - cached_messages
                 if messages_to_show:
                     messages_to_show = list(messages_to_show)
+                    for msg in messages_to_show:
+                        os.system(f'osascript -e \'display notification "{msg.data}" with title "{msg.sent_by}" sound name "Chord"\'')
                     messages_to_show.sort(key=lambda x: x.unix_time)
 
                     self.add_messages(messages_to_show)
@@ -699,7 +700,8 @@ class ChatsWindow(QtWidgets.QMainWindow):
 
     def add_chats(self, chats):
         for chat in chats:
-            chat_widget = ChatWidget(chat, api.decrypt_message(chat.last_message), None, credentials["username"])
+            chat.last_message = api.decrypt_message(chat.last_message)
+            chat_widget = ChatWidget(chat, None, credentials["username"])
             chat_item = QtWidgets.QListWidgetItem()
             chat_item.setSizeHint(QtCore.QSize(100, 70))
             self.chats_list.addItem(chat_item)
@@ -814,9 +816,7 @@ class NewContactWindow(QtWidgets.QMainWindow):
 
 
 if __name__ == "__main__":
-    app = QtWidgets.QApplication([""])
-    # chats_window = ChatsWindow()
-    # chats_window.show()
+    app = QtWidgets.QApplication(sys.argv)
     try:
         response = RocketAPI(credentials["login"], credentials["password"]).get_user_data()
         if response["status"] == "OK" or response["error"] == "No internet connection":
@@ -827,7 +827,9 @@ if __name__ == "__main__":
             main = SigninWindow()
             main.show()
     except Exception as e:
-        print(e)
+        print(e, 1)
         main = SigninWindow()
         main.show()
+    app.setApplicationName("Rocket Sender")
+    app.setWindowIcon(QtGui.QIcon("img/logo.png"))
     app.exec()
