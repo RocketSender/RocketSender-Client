@@ -8,30 +8,31 @@ import json
 import hashlib
 import pyqrcode
 import os
-from functions import get_tor_session
+from functions import get_tor_session, replace_url_to_link
 from constants import api, contacts, credentials, username_len
 import requests
 from binascii import hexlify
 
 
 class ChatWidget(QtWidgets.QWidget):
-    def __init__(self, chat, last_message, image=None, username=None):
+    def __init__(self, chat, image=None, username=None):
         super().__init__()
         self.message = "No messages"
         self.viewed = True
         self.sent_by = username
-        if last_message is not None:
-            if last_message["status"] == "OK":
-                if last_message["type"] == MessageTypes.Text:
-                    if last_message["sent_by"] == username:
+        # chat.last_message = json.loads(chat.last_message)
+        if chat.last_message is not None:
+            if chat.last_message["status"] == "OK":
+                if chat.last_message["type"] == MessageTypes.Text:
+                    if chat.last_message["sent_by"] == username:
                         self.message = "You: "
-                        self.message += last_message["data"]
+                        self.message += chat.last_message["data"]
                     else:
-                        self.message = last_message["data"]
-                    self.viewed = last_message["viewed"]
-                    self.sent_by = last_message["sent_by"]
+                        self.message = chat.last_message["data"]
+                    self.viewed = chat.last_message["viewed"]
+                    self.sent_by = chat.last_message["sent_by"]
                 else:
-                    self.message = last_message["data"]
+                    self.message = lchat.ast_message["data"]
         if len(self.message) > 25:
             self.message = self.message[:25] + "..."
         self.chat = chat
@@ -44,6 +45,7 @@ class ChatWidget(QtWidgets.QWidget):
         user_image_label = RoundImageLabel(image, 45, antialiasing=True)
         user_image_label.setAlignment(QtCore.Qt.AlignCenter)
         username_label = QtWidgets.QLabel(self.chat.username)
+        username_label.setStyleSheet("font-weight: bold; font-size: 15px")
         if self.viewed is False:
             viewed_label = QtWidgets.QLabel()
             viewed_label.setStyleSheet("background-color: #0A60FF; border-radius: 4px")
@@ -72,6 +74,7 @@ class ContactWidget(QtWidgets.QWidget):
 
         self.name_label = QtWidgets.QLabel(self)
         self.name_label.setText(contact.readable_name)
+        self.name_label.setStyleSheet("font-weight: bold; font-size: 15px")
 
         self.contact_image = RoundImageLabel(contact.picture, 45)
 
@@ -183,12 +186,15 @@ class TextMessageWidget(QtWidgets.QWidget):
                 name_to_show = self.message.sent_by
 
         self.username_label = QtWidgets.QLabel(name_to_show)
-        self.username_label.setStyleSheet("color: blue")
         self.username_label.setMinimumHeight(20)
+        self.username_label.setStyleSheet("font-weight: bold; color: blue")
 
         self.message_label = QtWidgets.QLabel()
-        self.message_label.setText(self.message.data)
+        self.message_label.setText(replace_url_to_link(self.message.data))
         self.message_label.setWordWrap(True)
+        self.message_label.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse | QtCore.Qt.TextBrowserInteraction)
+        self.message_label.setOpenExternalLinks(True)
+        self.message_label.setTextFormat(QtCore.Qt.RichText)
 
         self.time_label = QtWidgets.QLabel()
         self.time_label.setStyleSheet("color: gray")
@@ -251,8 +257,8 @@ class FileMessageWidget(QtWidgets.QWidget):
                 name_to_show = self.message.sent_by
 
         self.username_label = QtWidgets.QLabel(name_to_show)
-        self.username_label.setStyleSheet("color: blue")
         self.username_label.setMinimumHeight(20)
+        self.username_label.setStyleSheet("font-weight: bold; font-size: 15px; color: blue")
 
         self.filename_label = QtWidgets.QLabel()
         self.filename_label.setText(message_data["name"])
