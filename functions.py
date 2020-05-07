@@ -24,6 +24,17 @@ def password_check(passwd):
     return val, err_text
 
 
+def replace_url_to_link(value):
+    import re
+    # Replace url to link
+    urls = re.compile(r"((https?):((//)|(\\\\))+[\w\d:#@%/;$()~_?\+-=\\\.&]*)", re.MULTILINE|re.UNICODE)
+    value = urls.sub(r'<a href="\1" target="_blank">\1</a>', value)
+    # Replace email to mailto
+    urls = re.compile(r"([\w\-\.]+@(\w[\w\-]+\.)+[\w\-]+)", re.MULTILINE|re.UNICODE)
+    value = urls.sub(r'<a href="mailto:\1">\1</a>', value)
+    return value
+
+
 def get_tor_session():
     session = requests.Session()
     session.proxies = {'http': 'socks5://127.0.0.1:9050',
