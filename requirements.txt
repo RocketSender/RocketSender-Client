@@ -1,0 +1,7 @@
+cryptography==2.8
+PyQt5
+pillow
+pypng
+pyqrcode
+
+
