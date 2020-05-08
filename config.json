@@ -1,3 +1,6 @@
 {
+    "background_color": "white",
+    "text_color": "black",
+    "secondary_text_color": "lightgray",
     "server_address": "https://35.209.84.85:8080"
 }
