@@ -1,3 +1,4 @@
+![Python application](https://github.com/RocketSender/RocketSender-Client/workflows/Python%20application/badge.svg)
 # Rocket Sender Desktop
 This is a desktop version of Rocket Sender. Also check [Android](https://github.com/RocketSender/RocketSender-Android) and [Server](https://github.com/RocketSender/RocketSender-Server)
 ## Installation
