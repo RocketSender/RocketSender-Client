@@ -19,6 +19,8 @@ from data.messages import Message
 from threading import Thread
 from collections import defaultdict
 from PIL import Image
+import logging
+import platform
 import hashlib
 import requests
 import json
@@ -27,6 +29,11 @@ import time
 import copy
 import sys
 import os
+
+
+logging.basicConfig(filename="logs.log",
+                    format='%(asctime)s %(levelname)s %(name)s %(message)s',
+                    level=logging.DEBUG)
 
 
 class SigninWindow(QtWidgets.QMainWindow):
@@ -43,7 +50,9 @@ class SigninWindow(QtWidgets.QMainWindow):
         self.logo_label = QtWidgets.QLabel(self.centralwidget)
         self.logo_label.setAlignment(QtCore.Qt.AlignCenter)
         pixmap = QtGui.QPixmap("img/out_logo.png")
-        self.logo_label.setPixmap(pixmap.scaled(256, 256, transformMode=QtCore.Qt.SmoothTransformation))
+        self.logo_label.setPixmap(pixmap.scaled(256, 256,
+                                                transformMode=QtCore.Qt.
+                                                SmoothTransformation))
         self.name_label = QtWidgets.QLabel("Rocket Sender")
         self.name_label.setStyleSheet("font-weight: medium; font-size: 24px")
         self.name_label.setAlignment(QtCore.Qt.AlignCenter)
@@ -88,8 +97,11 @@ class SigninWindow(QtWidgets.QMainWindow):
                 response["data"]["password"] = password
                 json.dump(response["data"], f)
             api = RocketAPI(login, password)
-            credentials = json.load(open("credentials.json", "r", encoding="utf-8"))
-            db_session.global_init(f"db/{hashlib.sha512(credentials['login'].encode('utf-8')).hexdigest()}.db")
+            api.credentials = response["data"]
+            credentials = json.load(open("credentials.json", "r",
+                                         encoding="utf-8"))
+            db_session.global_init(f"""db/{hashlib.sha512(credentials['login'].
+                                   encode('utf-8')).hexdigest()}.db""")
             session = db_session.create_session()
             contacts = session.query(Contact).all()
             ChatsWindow().show()
@@ -122,7 +134,9 @@ class SignupWindow(QtWidgets.QMainWindow):
         self.logo_label = QtWidgets.QLabel(self.centralwidget)
         self.logo_label.setAlignment(QtCore.Qt.AlignCenter)
         pixmap = QtGui.QPixmap("img/out_logo.png")
-        self.logo_label.setPixmap(pixmap.scaled(256, 256, transformMode=QtCore.Qt.SmoothTransformation))
+        self.logo_label.setPixmap(pixmap.scaled(256, 256,
+                                                transformMode=QtCore.Qt.
+                                                SmoothTransformation))
         self.name_label = QtWidgets.QLabel("Rocket Sender")
         self.name_label.setStyleSheet("font-weight: medium; font-size: 24px")
         self.name_label.setAlignment(QtCore.Qt.AlignCenter)
@@ -366,6 +380,7 @@ class ChatsWindow(QtWidgets.QMainWindow):
 
         self.current_chat_label = QtWidgets.QLabel()
         self.current_chat_label.setAlignment(QtCore.Qt.AlignLeft)
+        self.current_chat_label.setStyleSheet("font-weight: bold; font-size:15px;")
 
         self.settings_widget = SettingsWidget()
 
@@ -505,6 +520,7 @@ class ChatsWindow(QtWidgets.QMainWindow):
         for chat in chats:
             cached_chat = session.query(Chat).filter(Chat == chat).first()
             if not cached_chat:
+                chat.last_message = json.dumps(chat.last_message)
                 session.add(chat)
             elif cached_chat.unix_time != chat.unix_time:
                 cached_chat.unix_time = chat.unix_time
@@ -569,7 +585,7 @@ class ChatsWindow(QtWidgets.QMainWindow):
             self.cache_messages([message])
             self.add_messages([message])
         except Exception as e:
-            print(e)
+            logging.error(e)
 
     def complete_sending_message(self, response):
         row = response[1]
@@ -580,7 +596,7 @@ class ChatsWindow(QtWidgets.QMainWindow):
             session.merge(message)
             session.commit()
         else:
-            print("error sending the message", response[0]["error"])
+            logging.error("error sending the message: " + response[0]["error"])
 
     def cache_messages(self, messages):
         session = db_session.create_session()
@@ -605,7 +621,7 @@ class ChatsWindow(QtWidgets.QMainWindow):
                             cached_message.data = message.data
                         session.commit()
         except Exception as e:
-            print(e)
+            logging.warning(e)
 
     def update_contacts_list(self):
         result = session.query(Contact).all()
@@ -654,8 +670,9 @@ class ChatsWindow(QtWidgets.QMainWindow):
                 messages_to_show = all_messages_set - cached_messages
                 if messages_to_show:
                     messages_to_show = list(messages_to_show)
-                    for msg in messages_to_show:
-                        os.system(f'osascript -e \'display notification "{msg.data}" with title "{msg.sent_by}" sound name "Chord"\'')
+                    if platform.system() == "Darwin":
+                        for msg in messages_to_show:
+                            os.system(f'osascript -e \'display notification "{msg.data}" with title "{msg.sent_by}" sound name "Chord"\'')
                     messages_to_show.sort(key=lambda x: x.unix_time)
 
                     self.add_messages(messages_to_show)
@@ -827,7 +844,7 @@ if __name__ == "__main__":
             main = SigninWindow()
             main.show()
     except Exception as e:
-        print(e, 1)
+        logging.warning(e)
         main = SigninWindow()
         main.show()
     app.setApplicationName("Rocket Sender")

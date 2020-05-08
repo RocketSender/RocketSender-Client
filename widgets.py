@@ -32,7 +32,7 @@ class ChatWidget(QtWidgets.QWidget):
                     self.viewed = chat.last_message["viewed"]
                     self.sent_by = chat.last_message["sent_by"]
                 else:
-                    self.message = lchat.ast_message["data"]
+                    self.message = chat.last_message["data"]
         if len(self.message) > 25:
             self.message = self.message[:25] + "..."
         self.chat = chat
@@ -267,7 +267,7 @@ class FileMessageWidget(QtWidgets.QWidget):
 
         self.size_label = QtWidgets.QLabel()
         self.size_label.setStyleSheet("color: grey")
-        self.size_label.setText(message_data["size"])
+        self.size_label.setText(str(message_data["size"]))
 
         self.download_file_button = QtWidgets.QPushButton()
         self.download_file_button.setText("Download")
