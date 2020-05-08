@@ -672,7 +672,11 @@ class ChatsWindow(QtWidgets.QMainWindow):
                     messages_to_show = list(messages_to_show)
                     if platform.system() == "Darwin":
                         for msg in messages_to_show:
-                            os.system(f'osascript -e \'display notification "{msg.data}" with title "{msg.sent_by}" sound name "Chord"\'')
+                            if msg.sent_by != credentials["username"]:
+                                os.system(f'''osascript -e \'display
+                                              notification "{msg.data}" with
+                                              title "{msg.sent_by}" sound
+                                              name "Chord"\'''')
                     messages_to_show.sort(key=lambda x: x.unix_time)
 
                     self.add_messages(messages_to_show)
