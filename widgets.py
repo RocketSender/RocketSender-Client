@@ -253,13 +253,13 @@ class FileMessageWidget(QtWidgets.QWidget):
         name_to_show = "You"
         if self.message.sent_by != credentials["username"]:
             if self.message.sent_by in contacts:
-                name_to_show = contacts[contacts.index(self.message.sent_by)]
+                name_to_show = contacts[contacts.index(self.message.sent_by)].readable_name
             else:
                 name_to_show = self.message.sent_by
 
         self.username_label = QtWidgets.QLabel(name_to_show)
         self.username_label.setMinimumHeight(20)
-        self.username_label.setStyleSheet("font-weight: bold; font-size: 15px; color: blue")
+        self.username_label.setStyleSheet("font-weight: bold; color: blue")
 
         self.filename_label = QtWidgets.QLabel()
         self.filename_label.setText(message_data["name"])
