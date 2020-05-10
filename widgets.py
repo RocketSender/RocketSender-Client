@@ -36,15 +36,16 @@ class ChatWidget(QtWidgets.QWidget):
         if len(self.message) > 25:
             self.message = self.message[:25] + "..."
         self.chat = chat
+        username = chat.username
         if chat.username in contacts:
             contact = contacts[contacts.index(chat.username)]
-            chat.username = contact.readable_name
+            username = contact.readable_name
             image = contact.picture
         vbox = QtWidgets.QGridLayout()
         vbox.setAlignment(QtCore.Qt.AlignLeft)
         user_image_label = RoundImageLabel(image, 45, antialiasing=True)
         user_image_label.setAlignment(QtCore.Qt.AlignCenter)
-        username_label = QtWidgets.QLabel(self.chat.username)
+        username_label = QtWidgets.QLabel(username)
         username_label.setStyleSheet("font-weight: bold; font-size: 15px")
         if self.viewed is False:
             viewed_label = QtWidgets.QLabel()
@@ -181,7 +182,7 @@ class TextMessageWidget(QtWidgets.QWidget):
         name_to_show = "You"
         if self.message.sent_by != credentials["username"]:
             if self.message.sent_by in contacts:
-                name_to_show = contacts[contacts.index(self.message.sent_by)]
+                name_to_show = contacts[contacts.index(self.message.sent_by)].readable_name
             else:
                 name_to_show = self.message.sent_by
 
@@ -410,6 +411,7 @@ class BottomButtonsBar(QtWidgets.QWidget):
 
 class GrowingTextEdit(QtWidgets.QTextEdit):
     signal = QtCore.pyqtSignal("PyQt_PyObject")
+
     def __init__(self, *args, **kwargs):
         super(GrowingTextEdit, self).__init__(*args, **kwargs)
         self.document().contentsChanged.connect(self.sizeChange)
