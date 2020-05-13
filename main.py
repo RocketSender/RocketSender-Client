@@ -583,7 +583,7 @@ class ChatsWindow(QtWidgets.QMainWindow):
                                              message]
             self.send_message_thread.start()
             self.cache_messages([message])
-            self.add_messages([message])
+            self.add_messages([message], True)
         except Exception as e:
             logging.error(e)
 
