@@ -1,10 +1,10 @@
 ![Python application](https://github.com/RocketSender/RocketSender-Client/workflows/Python%20application/badge.svg)
 [![Python 3.7](https://img.shields.io/badge/python-3.7-blue.svg)](https://www.python.org/downloads/release/python-370/)
 ![Platform](https://img.shields.io/badge/Platform-Windows/Linux/MacOS-brightgreen)
-[![license](https://img.shields.io/github/license/RocketSender/RocketSender-Android)](https://github.com/RocketSender/RocketSender-Android/blob/master/LICENSE)
+[![license](https://img.shields.io/github/license/RocketSender/RocketSender-Client)](https://github.com/RocketSender/RocketSender-Client/blob/master/LICENSE)
 ![version](https://img.shields.io/badge/Version-Beta%20v0.1-yellow)
-[![issue](https://img.shields.io/github/issues/RocketSender/RocketSender-Android)](https://github.com/RocketSender/RocketSender-Android/issues)
-[![commits](https://img.shields.io/github/last-commit/RocketSender/RocketSender-Android)](https://github.com/RocketSender/RocketSender-Android/commits/)
+[![issue](https://img.shields.io/github/issues/RocketSender/RocketSender-Client)](https://github.com/RocketSender/RocketSender-Client/issues)
+[![commits](https://img.shields.io/github/last-commit/RocketSender/RocketSender-Client](https://github.com/RocketSender/RocketSender-Client/commits/)
 # Rocket Sender Desktop
 This is a desktop version of Rocket Sender. Also check [Android](https://github.com/RocketSender/RocketSender-Android) and [Server](https://github.com/RocketSender/RocketSender-Server)
 ## Installation
