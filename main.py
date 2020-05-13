@@ -33,7 +33,7 @@ import os
 
 logging.basicConfig(filename="logs.log",
                     format='%(asctime)s %(levelname)s %(name)s %(message)s',
-                    level=logging.DEBUG)
+                    level=logging.ERROR)
 
 
 class SigninWindow(QtWidgets.QMainWindow):
@@ -534,7 +534,11 @@ class ChatsWindow(QtWidgets.QMainWindow):
         self.current_chat = chat
         self.messages.clear()
         self.messages_list.clear()
-        username = contacts[chat.username] if chat.username in contacts else chat.username
+        username = list(filter(lambda x: x.username == chat.username, contacts))
+        if not username:
+            username = chat.username
+        else:
+            username = username[0].readable_name
         self.current_chat_label.setText(username)
         self.get_messages_thread.args = [chat.chat_id]
         self.start_getting_messages()
@@ -545,7 +549,7 @@ class ChatsWindow(QtWidgets.QMainWindow):
     def send_file(self):
         fname, _ = QtWidgets.QFileDialog.getOpenFileName(self, 'Choose file', '', "All files (*)")
         if fname:
-            self.upload_file_thread.args = [fname, self.current_chat.username]
+            self.upload_file_thread.args = [fname, self.current_chat.username, self.current_chat.chat_id]
             self.upload_file_thread.start()
 
     def complete_file_upload(self, response):
@@ -813,18 +817,19 @@ class NewContactWindow(QtWidgets.QMainWindow):
             self.picture_path = fname
 
     def save_contact(self):
+        global contacts
         if self.username_line.text() and self.name_line.text():
             username = self.username_line.text()
             readable_name = self.name_line.text()
             picture = Image.open(self.picture_path)
-            if not list(filter(lambda x: x.username == username, self.parent.contacts)):
+            if not list(filter(lambda x: x.username == username, contacts)):
                 if len(username) == username_len:
                     filename = "img/" + username + ".png"
                     picture.save(filename)
                     contact = Contact(username, readable_name, filename)
                     session.add(contact)
                     session.commit()
-                    self.parent.contacts.append(Contact(readable_name, username, picture))
+                    contacts.append(Contact(readable_name, username, picture))
                     self.parent.update_contacts_list()
                     self.parent.on_list_label.hide()
                     self.close()

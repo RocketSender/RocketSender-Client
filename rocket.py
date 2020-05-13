@@ -209,12 +209,12 @@ class RocketAPI:
 
         return payload
 
-    def upload_file(self, filename, username):
+    def upload_file(self, filename, username, chat_id):
         from constants import config
         with open(filename, "rb") as f:
             response = self.encrypt_data(f.read(), username)
             if response["status"] == "OK":
-                r = self.session.post(config["server_address"] + "/api/upload_file", headers={"login": self.login, "password": self.password}, files={os.path.basename(filename): response["data"]}, verify=False)
+                r = self.session.post(config["server_address"] + "/api/upload_file", headers={"login": self.login, "password": self.password, "chat_id": chat_id}, files={os.path.basename(filename): response["data"]}, verify=False)
                 if r.status_code == 200:
                     return {"status": "OK", "name": r.json()["file_name"],
                             "file_id": r.json()["file_id"], "size": r.json()["file_size"],
@@ -237,11 +237,15 @@ class RocketAPI:
             response = {"status": "OK", "public_key": cached_user.public_key}
         else:
             response = self.get_public_key(username)
-            user = User()
-            user.username = username
-            user.public_key = response["public_key"]
-            session.add(user)
-            session.commit()
+            if response["status"] == "OK":
+                user = User()
+                user.username = username
+                user.public_key = response["public_key"]
+                session.add(user)
+                session.commit()
+            else:
+                print(response["error"])
+                return {"status": "error", "error": response["error"]}
         if response["status"] == "OK":
             # Pad data
             padder = padding.PKCS7(128).padder()
@@ -341,7 +345,6 @@ class RocketAPI:
         decryptor = cipher.decryptor()
         decrypted_data = decryptor.update(bytes.fromhex(data)) + decryptor.finalize()
         decrypted_data = unpadder.update(decrypted_data) + unpadder.finalize()
-        print(decrypted_data)
 
         public_key.verify(
             bytes.fromhex(signature),
