@@ -29,14 +29,10 @@ class Message(SqlAlchemyBase):
         self.signature = signature
 
     def __eq__(self, other):
-        return self.data == other.data and self.type == other.type and\
-            self.unix_time == other.unix_time and self.chat_id == other.chat_id and\
-            self.sent_by == other.sent_by
+        return round(self.unix_time) == round(other.unix_time) and self.chat_id == other.chat_id
 
     def __hash__(self):
-        return int(hexlify(f"""{self.data}{self.type}
-                               {self.unix_time}{self.chat_id}
-                               {self.sent_by}""".encode("utf-8")), 16)
+        return int(hexlify(f"""{round(self.unix_time)}{self.chat_id}""".encode("utf-8")), 16)
 
     def __repr__(self):
         return f"Message(data: {self.data}, type: {self.type}, viewed: {self.viewed}, chat_id: {self.chat_id}, sent_by: {self.sent_by}, unix_time: {self.unix_time})"
