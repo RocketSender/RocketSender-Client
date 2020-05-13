@@ -1,6 +1,7 @@
 import sqlalchemy
 from .db_session import SqlAlchemyBase
 from binascii import hexlify
+import math
 
 
 class Message(SqlAlchemyBase):
@@ -29,7 +30,7 @@ class Message(SqlAlchemyBase):
         self.signature = signature
 
     def __eq__(self, other):
-        return round(self.unix_time) == round(other.unix_time) and self.chat_id == other.chat_id
+        return math.floor(self.unix_time) == math.floor(other.unix_time) and self.chat_id == other.chat_id
 
     def __hash__(self):
         return int(hexlify(f"""{round(self.unix_time)}{self.chat_id}""".encode("utf-8")), 16)
