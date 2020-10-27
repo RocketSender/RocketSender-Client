@@ -1,4 +1,4 @@
-cryptography==2.8
+cryptography==3.2
 PyQt5
 pillow
 pypng
